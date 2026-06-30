@@ -89,18 +89,6 @@ const menuGroups = [
       "Pazarlama Merkezi",
     ],
   },
-  {
-    title: "Strateji & Rapor",
-    items: [
-      "Raporlar Merkezi",
-      "Hedef & KPI",
-      "Karar Destek",
-      "Operasyon Paneli",
-      "İleri Analiz",
-      "Raporlar & Export",
-      "Etkinlik Takvimi",
-    ],
-  },
 ];
 
 const revenueBars = [
@@ -113,7 +101,7 @@ const revenueBars = [
   { label: "Paz", value: "128K", height: "78%" },
 ];
 
-function AppStyles() {
+function Styles() {
   return (
     <style>{`
       * {
@@ -1081,19 +1069,22 @@ function HandsOffLogo() {
   return (
     <svg viewBox="0 0 512 512" fill="none">
       <rect width="512" height="512" rx="118" fill="#0D0F15" />
-      <circle cx="256" cy="210" r="118" fill="url(#paint0_radial)" />
+      <circle cx="256" cy="210" r="118" fill="#4C2D96" />
+
       <path
         d="M154 302C181 267 211 249 244 249C284 249 299 279 328 279C348 279 363 267 378 246"
         stroke="#E6C57A"
         strokeWidth="26"
         strokeLinecap="round"
       />
+
       <path
         d="M135 335C169 304 203 289 238 289C281 289 300 322 337 322C359 322 379 312 397 293"
         stroke="#D4A857"
         strokeWidth="22"
         strokeLinecap="round"
       />
+
       <text
         x="256"
         y="408"
@@ -1105,20 +1096,6 @@ function HandsOffLogo() {
       >
         HandsOff
       </text>
-      <defs>
-        <radialGradient
-          id="paint0_radial"
-          cx="0"
-          cy="0"
-          r="1"
-          gradientUnits="userSpaceOnUse"
-          gradientTransform="translate(256 210) rotate(90) scale(118)"
-        >
-          <stop stopColor="#7C3AED" />
-          <stop offset="0.55" stopColor="#3B2F88" />
-          <stop offset="1" stopColor="#111827" />
-        </radialGradient>
-      </defs>
     </svg>
   );
 }
@@ -1134,8 +1111,6 @@ function LogoBox({ small = false }) {
 function SplashScreen({ title, subtitle }) {
   return (
     <div className="splash">
-      <AppStyles />
-
       <div className="bg-layer grid-bg" />
       <div className="orb orb-1 glow" />
       <div className="orb orb-2 glow" />
@@ -1227,8 +1202,6 @@ function LoginScreen({ onLogin }) {
 
   return (
     <div className="login-page">
-      <AppStyles />
-
       <div className="bg-layer grid-bg" />
       <div className="orb orb-1 glow" />
       <div className="orb orb-2 glow" />
@@ -1282,7 +1255,9 @@ function LoginScreen({ onLogin }) {
               <div className="form-head">
                 <div>
                   <p className="form-eyebrow">HandsOff</p>
+
                   <h2 className="form-title">Panele Giriş</h2>
+
                   <p className="form-desc">
                     Restoran hesabına giriş yaparak yönetim paneline eriş.
                   </p>
@@ -1296,6 +1271,7 @@ function LoginScreen({ onLogin }) {
               <form onSubmit={handleSubmit}>
                 <div className="field">
                   <label>Mail adresi</label>
+
                   <input
                     name="email"
                     type="email"
@@ -1308,6 +1284,7 @@ function LoginScreen({ onLogin }) {
 
                 <div className="field">
                   <label>Şifre</label>
+
                   <input
                     name="password"
                     type="password"
@@ -1364,8 +1341,9 @@ function Topbar({ activePage, user, onLogout }) {
         <div className="session-pill">
           <div>
             <p className="session-restaurant">{user.restaurantName}</p>
+
             <p className="session-role">
-              {user.role} / {user.plan}
+              {user.role} / {user.plan || "Demo"}
             </p>
           </div>
 
@@ -1403,14 +1381,16 @@ function ListItem({ title, description, status }) {
   );
 }
 
-function Dashboard() {
+function Dashboard({ user }) {
   return (
     <div className="page">
       <div className="hero">
         <div className="hero-content">
           <div>
-            <p className="eyebrow">HandsOff / No1 Culinaria</p>
+            <p className="eyebrow">HandsOff / {user.restaurantName}</p>
+
             <h1>Operasyon merkezi</h1>
+
             <p>
               Günlük satış, kasa, rezervasyon, stok ve ekip akışını tek
               merkezden takip et. Kritik aksiyonları, gelir eğilimini ve modül
@@ -1423,9 +1403,20 @@ function Dashboard() {
       </div>
 
       <div className="cards">
-        <StatCard title="Günlük Ciro" value="128.500₺" note="+%18 dünle karşılaştırma" />
-        <StatCard title="Rezervasyon" value="64" note="12 masa onay bekliyor" />
+        <StatCard
+          title="Günlük Ciro"
+          value="128.500₺"
+          note="+%18 dünle karşılaştırma"
+        />
+
+        <StatCard
+          title="Rezervasyon"
+          value="64"
+          note="12 masa onay bekliyor"
+        />
+
         <StatCard title="Açık Görev" value="12" note="4 yüksek öncelik" />
+
         <StatCard title="Kasa Farkı" value="-150₺" note="Kontrol bekliyor" />
       </div>
 
@@ -1434,6 +1425,7 @@ function Dashboard() {
           <div className="panel-head">
             <div>
               <h2>Haftalık gelir görünümü</h2>
+
               <p className="panel-sub">
                 Adisyo, POS ve online satışların haftalık özeti.
               </p>
@@ -1461,6 +1453,7 @@ function Dashboard() {
           <div className="panel-head">
             <div>
               <h2>Kritik aksiyonlar</h2>
+
               <p className="panel-sub">Bugün kontrol edilmesi gereken işler.</p>
             </div>
 
@@ -1499,7 +1492,9 @@ function ModulePage({ title }) {
         <div className="hero-content">
           <div>
             <p className="eyebrow">HandsOff Module</p>
+
             <h1>{title}</h1>
+
             <p>
               {title} modülü için güvenli demo ekranı. Bu alan gerçek formlar,
               tablolar, filtreler, raporlar ve backend bağlantılarıyla
@@ -1513,8 +1508,11 @@ function ModulePage({ title }) {
 
       <div className="cards">
         <StatCard title="Durum" value="Hazır" note="Frontend demo ekran" />
+
         <StatCard title="Veri Kaynağı" value="Demo" note="Backend sonra" />
+
         <StatCard title="Yetki" value="Restoran Bazlı" note="SaaS yapı" />
+
         <StatCard title="Bağlantı" value="Planlandı" note="API sonra" />
       </div>
 
@@ -1523,6 +1521,7 @@ function ModulePage({ title }) {
           <div className="panel-head">
             <div>
               <h2>{title} akış özeti</h2>
+
               <p className="panel-sub">
                 Modülün üretim sürümünde sahip olacağı ana alanlar.
               </p>
@@ -1572,6 +1571,7 @@ function ModulePage({ title }) {
           <div className="panel-head">
             <div>
               <h2>Modül notu</h2>
+
               <p className="panel-sub">Bu ekranın satış/demo mantığı.</p>
             </div>
 
@@ -1608,8 +1608,6 @@ function Panel({ user, onLogout }) {
 
   return (
     <div className="app">
-      <AppStyles />
-
       <aside className="sidebar">
         <div className="sidebar-brand-card">
           <div className="brand-pill">
@@ -1654,7 +1652,7 @@ function Panel({ user, onLogout }) {
         <Topbar activePage={activePage} user={user} onLogout={onLogout} />
 
         {activePage === "Dashboard" ? (
-          <Dashboard />
+          <Dashboard user={user} />
         ) : (
           <ModulePage title={activePage} />
         )}
@@ -1703,27 +1701,32 @@ export default function App() {
     setSession(null);
   }
 
+  let screen;
+
   if (bootLoading) {
-    return (
+    screen = (
       <SplashScreen
         title="HandsOff açılıyor"
         subtitle="Restoran yönetim paneli, güvenli oturum ve işletme alanı hazırlanıyor."
       />
     );
-  }
-
-  if (loginLoading) {
-    return (
+  } else if (loginLoading) {
+    screen = (
       <SplashScreen
         title="Panel hazırlanıyor"
         subtitle="Restoran hesabı yükleniyor ve operasyon ekranları açılıyor."
       />
     );
+  } else if (!session) {
+    screen = <LoginScreen onLogin={handleLogin} />;
+  } else {
+    screen = <Panel user={session} onLogout={handleLogout} />;
   }
 
-  if (!session) {
-    return <LoginScreen onLogin={handleLogin} />;
-  }
-
-  return <Panel user={session} onLogout={handleLogout} />;
+  return (
+    <>
+      <Styles />
+      {screen}
+    </>
+  );
 }
