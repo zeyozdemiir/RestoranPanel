@@ -27,3 +27,77 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #d4a857;
 }
+@keyframes handsoffFloat {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+  }
+
+  50% {
+    transform: translateY(-18px) rotate(2deg);
+  }
+
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+}
+
+@keyframes handsoffFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes handsoffGlow {
+  0% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.85;
+    transform: scale(1.08);
+  }
+
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+}
+
+@keyframes handsoffLineMove {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 120px 120px;
+  }
+}
+
+.login-animate-float {
+  animation: handsoffFloat 6s ease-in-out infinite;
+}
+
+.login-animate-fade-up {
+  animation: handsoffFadeUp 0.75s ease-out both;
+}
+
+.login-animate-glow {
+  animation: handsoffGlow 4s ease-in-out infinite;
+}
+
+.login-grid-bg {
+  background-image: linear-gradient(
+      rgba(212, 168, 87, 0.08) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(212, 168, 87, 0.08) 1px, transparent 1px);
+  background-size: 42px 42px;
+  animation: handsoffLineMove 18s linear infinite;
+}

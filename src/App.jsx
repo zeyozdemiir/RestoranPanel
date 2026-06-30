@@ -1,166 +1,1729 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import MainLayout from "./layouts/MainLayout";
+import { useEffect, useState } from "react";
 
-import Dashboard from "./pages/Dashboard";
-import Tables from "./pages/Tables";
-import Reservations from "./pages/Reservations";
-
-import Ingredients from "./pages/Ingredients";
-import Suppliers from "./pages/Suppliers";
-import Payables from "./pages/Payables";
-import PurchaseRequests from "./pages/PurchaseRequests";
-import StockCount from "./pages/StockCount";
-import Breakage from "./pages/Breakage";
-import Shortfalls from "./pages/Shortfalls";
-import StockOptimization from "./pages/StockOptimization";
-import WineInventory from "./pages/WineInventory";
-import BeverageInventory from "./pages/BeverageInventory";
-import WinePairing from "./pages/WinePairing";
-
-import MenuCost from "./pages/MenuCost";
-import MenuEngineering from "./pages/MenuEngineering";
-import PrintMenu from "./pages/PrintMenu";
-import Campaigns from "./pages/Campaigns";
-import CompetitorPrices from "./pages/CompetitorPrices";
-import TableQR from "./pages/TableQR";
-import EventMenu from "./pages/EventMenu";
-
-import TeamCenter from "./pages/TeamCenter";
-import Staff from "./pages/Staff";
-import Payroll from "./pages/Payroll";
-import LeaveManagement from "./pages/LeaveManagement";
-import Tips from "./pages/Tips";
-import Customers from "./pages/Customers";
-import Feedback from "./pages/Feedback";
-import MarketingCenter from "./pages/MarketingCenter";
-
-import ReportsHub from "./pages/ReportsHub";
-import Kpis from "./pages/Kpis";
-import DecisionCenter from "./pages/DecisionCenter";
-import CompareReports from "./pages/CompareReports";
-import OperationsCenter from "./pages/OperationsCenter";
-import Analytics from "./pages/Analytics";
-import Reports from "./pages/Reports";
-import UnifiedCalendar from "./pages/UnifiedCalendar";
-import Events from "./pages/Events";
-import FlowGuide from "./pages/FlowGuide";
-
-import PlaceholderPage from "./pages/PlaceholderPage";
-
-const placeholderRoutes = [
-  { path: "/daily", title: "Günlük Operasyon" },
-  { path: "/adisyo-import", title: "Adisyo Rapor Yükle" },
-  { path: "/cash-count", title: "Kasa Sayımı" },
-  { path: "/todos", title: "Görev Listesi" },
-  { path: "/daily-checklists", title: "Günlük Çeklistler" },
-  { path: "/ai-assistant", title: "AI Asistan" },
-
-  { path: "/profit-center", title: "Para Paneli" },
-  { path: "/revenue", title: "Gelir Takibi" },
-  { path: "/expenses", title: "Gider Yönetimi" },
-  { path: "/cashflow", title: "Kasa & Ödeme" },
-  { path: "/cashflow-dashboard", title: "Nakit Akışı" },
-  { path: "/invoice-import", title: "Fatura Yükle / Alım" },
-  { path: "/house-accounts", title: "Ödenmezler" },
-  { path: "/banks", title: "Banka Hesapları" },
-  { path: "/credit-cards", title: "Kredi Kartları" },
-  { path: "/tax-calendar", title: "Vergi Takvimi" },
-  { path: "/legal-params", title: "Yasal Parametreler" },
-  { path: "/financial-reports", title: "Mali Tablolar" },
-  { path: "/accountant-package", title: "Mali Müşavir Paketi" },
-
-  { path: "/quality", title: "Kalite & HACCP" },
-  { path: "/checklist-templates", title: "Çeklist Şablonları" },
-  { path: "/pest-control", title: "Pest Control" },
-  { path: "/legal-permits", title: "Yasal İzinler" },
-  { path: "/kvkk", title: "KVKK" },
-  { path: "/fixed-assets", title: "Sabit Kıymetler" },
-  { path: "/insurance", title: "Sigortalar" },
-  { path: "/pos-commission", title: "POS Komisyon" },
-  { path: "/service-directory", title: "Servis Rehberi" },
-  { path: "/ai-audit", title: "AI Denetim" },
-  { path: "/data-health", title: "Veri Sağlığı" },
-  { path: "/audit", title: "Denetim & Yedek" },
-  { path: "/help", title: "Yardım" },
-  { path: "/settings", title: "Ayarlar" },
+const demoUsers = [
+  {
+    id: 1,
+    email: "admin@handsoff.com",
+    password: "123456",
+    role: "Super Admin",
+    restaurantName: "No1 Culinaria",
+    plan: "Enterprise",
+  },
+  {
+    id: 2,
+    email: "demo@restaurant.com",
+    password: "123456",
+    role: "Restaurant Admin",
+    restaurantName: "Demo Restaurant",
+    plan: "Pro",
+  },
 ];
 
-function App() {
+const menuGroups = [
+  {
+    title: "Her Gün",
+    items: [
+      "Dashboard",
+      "Günlük Operasyon",
+      "Rezervasyonlar",
+      "Masa Yönetimi",
+      "Adisyo Rapor Yükle",
+      "Kasa Sayımı",
+      "Görev Listesi",
+      "Günlük Çeklistler",
+      "AI Asistan",
+    ],
+  },
+  {
+    title: "Para & Muhasebe",
+    items: [
+      "Para Paneli",
+      "Gelir Takibi",
+      "Gider Yönetimi",
+      "Kasa & Ödeme",
+      "Nakit Akışı",
+      "Fatura Yükle / Alım",
+      "Tedarikçiler",
+      "Ticari Borçlar",
+      "Banka Hesapları",
+      "Vergi Takvimi",
+      "Mali Tablolar",
+    ],
+  },
+  {
+    title: "Menü & Satış",
+    items: [
+      "Menü & Maliyet",
+      "Menü Mühendisliği",
+      "Müşteri Menüsü",
+      "Kampanya & İndirim",
+      "Rakip Fiyatları",
+      "Masa QR Kartları",
+      "Özel Gün Menüleri",
+    ],
+  },
+  {
+    title: "Mutfak, Bar & Stok",
+    items: [
+      "Hammadde Deposu",
+      "Stok Sayım & Fire",
+      "Satın Alma Talepleri",
+      "Stoksuzluk",
+      "Stok Optimizasyonu",
+      "Kırılma & Zayi",
+      "Şarap Envanteri",
+      "İçki & Bar Envanteri",
+      "Şarap Pairing",
+    ],
+  },
+  {
+    title: "Ekip & Müşteri",
+    items: [
+      "Ekip Merkezi",
+      "Personel & Vardiya",
+      "Bordro",
+      "Yıllık İzin",
+      "Bahşiş Yönetimi",
+      "Müşteri CRM",
+      "Geri Bildirim",
+      "Pazarlama Merkezi",
+    ],
+  },
+  {
+    title: "Strateji & Rapor",
+    items: [
+      "Raporlar Merkezi",
+      "Hedef & KPI",
+      "Karar Destek",
+      "Operasyon Paneli",
+      "İleri Analiz",
+      "Raporlar & Export",
+      "Etkinlik Takvimi",
+    ],
+  },
+];
+
+const revenueBars = [
+  { label: "Pzt", value: "78K", height: "48%" },
+  { label: "Sal", value: "92K", height: "58%" },
+  { label: "Çar", value: "110K", height: "72%" },
+  { label: "Per", value: "96K", height: "62%" },
+  { label: "Cum", value: "138K", height: "84%" },
+  { label: "Cmt", value: "164K", height: "100%" },
+  { label: "Paz", value: "128K", height: "78%" },
+];
+
+function AppStyles() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<Dashboard />} />
+    <style>{`
+      * {
+        box-sizing: border-box;
+      }
 
-          <Route path="/tables" element={<Tables />} />
-          <Route path="/reservations" element={<Reservations />} />
+      body {
+        margin: 0;
+        background: #f3eee6;
+        font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
 
-          <Route path="/ingredients" element={<Ingredients />} />
-          <Route path="/suppliers" element={<Suppliers />} />
-          <Route path="/payables" element={<Payables />} />
-          <Route path="/purchase-requests" element={<PurchaseRequests />} />
-          <Route path="/stock-count" element={<StockCount />} />
-          <Route path="/breakage" element={<Breakage />} />
-          <Route path="/shortfalls" element={<Shortfalls />} />
-          <Route path="/stock-optimization" element={<StockOptimization />} />
-          <Route path="/wine-inventory" element={<WineInventory />} />
-          <Route path="/beverage-inventory" element={<BeverageInventory />} />
-          <Route path="/wine-pairing" element={<WinePairing />} />
+      button,
+      input {
+        font-family: inherit;
+      }
 
-          <Route path="/menu" element={<MenuCost />} />
-          <Route path="/engineering" element={<MenuEngineering />} />
-          <Route path="/print-menu" element={<PrintMenu />} />
-          <Route path="/campaigns" element={<Campaigns />} />
-          <Route path="/competitor-prices" element={<CompetitorPrices />} />
-          <Route path="/table-qr" element={<TableQR />} />
-          <Route path="/event-menu" element={<EventMenu />} />
+      button {
+        cursor: pointer;
+      }
 
-          <Route path="/team-center" element={<TeamCenter />} />
-          <Route path="/staff" element={<Staff />} />
-          <Route path="/payroll" element={<Payroll />} />
-          <Route path="/leave-management" element={<LeaveManagement />} />
-          <Route path="/tips" element={<Tips />} />
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/feedback" element={<Feedback />} />
-          <Route path="/marketing-center" element={<MarketingCenter />} />
+      @keyframes gridMove {
+        from { background-position: 0 0; }
+        to { background-position: 140px 140px; }
+      }
 
-          <Route path="/reports-hub" element={<ReportsHub />} />
-          <Route path="/kpis" element={<Kpis />} />
-          <Route path="/decision-center" element={<DecisionCenter />} />
-          <Route path="/compare-reports" element={<CompareReports />} />
-          <Route path="/operations-center" element={<OperationsCenter />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/unified-calendar" element={<UnifiedCalendar />} />
-          <Route path="/events" element={<Events />} />
-          <Route path="/flow-guide" element={<FlowGuide />} />
+      @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(28px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
 
-          {placeholderRoutes.map((route) => (
-            <Route
-              key={route.path}
-              path={route.path}
-              element={
-                <PlaceholderPage
-                  title={route.title}
-                  description={`${route.title} modülü şimdilik güvenli geçici ekranda açılıyor. Toplantıdan sonra bu modülü tekrar gerçek ekrana bağlayacağız.`}
-                />
-              }
-            />
-          ))}
+      @keyframes glow {
+        0% { opacity: 0.35; transform: scale(1); }
+        50% { opacity: 0.9; transform: scale(1.08); }
+        100% { opacity: 0.35; transform: scale(1); }
+      }
 
-          <Route
-            path="*"
-            element={
-              <PlaceholderPage
-                title="Sayfa Bulunamadı"
-                description="Aradığın sayfa henüz tanımlanmamış olabilir. Sidebar üzerinden mevcut modüllere dönebilirsin."
-              />
-            }
-          />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+      @keyframes progress {
+        from { width: 0%; }
+        to { width: 100%; }
+      }
+
+      @keyframes floatLogo {
+        0% { transform: translateY(0px) rotate(0deg); }
+        50% { transform: translateY(-16px) rotate(1.5deg); }
+        100% { transform: translateY(0px) rotate(0deg); }
+      }
+
+      @keyframes orbit {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+
+      .grid-bg {
+        background-image:
+          linear-gradient(rgba(212, 168, 87, 0.08) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(212, 168, 87, 0.08) 1px, transparent 1px);
+        background-size: 46px 46px;
+        animation: gridMove 22s linear infinite;
+      }
+
+      .fade-up {
+        animation: fadeUp 0.75s ease-out both;
+      }
+
+      .glow {
+        animation: glow 4s ease-in-out infinite;
+      }
+
+      .float-logo {
+        animation: floatLogo 5s ease-in-out infinite;
+      }
+
+      .splash,
+      .login-page {
+        position: relative;
+        min-height: 100vh;
+        overflow: hidden;
+        background: radial-gradient(circle at top, #18140d 0%, #08090d 50%, #050608 100%);
+        color: white;
+      }
+
+      .splash {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+
+      .bg-layer {
+        position: absolute;
+        inset: 0;
+        opacity: 0.65;
+      }
+
+      .orb {
+        position: absolute;
+        border-radius: 999px;
+        filter: blur(95px);
+      }
+
+      .orb-1 {
+        width: 440px;
+        height: 440px;
+        left: -130px;
+        top: -130px;
+        background: rgba(212, 168, 87, 0.24);
+      }
+
+      .orb-2 {
+        width: 520px;
+        height: 520px;
+        right: -160px;
+        bottom: -160px;
+        background: rgba(124, 58, 237, 0.18);
+      }
+
+      .splash-card {
+        position: relative;
+        z-index: 2;
+        width: 100%;
+        max-width: 620px;
+        text-align: center;
+        padding: 44px;
+        border-radius: 42px;
+        border: 1px solid rgba(212, 168, 87, 0.18);
+        background: rgba(14, 15, 20, 0.72);
+        box-shadow: 0 40px 140px rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(24px);
+      }
+
+      .logo-orbit {
+        position: relative;
+        width: 176px;
+        height: 176px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .logo-orbit::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 44px;
+        border: 1px solid rgba(212, 168, 87, 0.25);
+        border-top-color: rgba(230, 197, 122, 0.85);
+        animation: orbit 6s linear infinite;
+      }
+
+      .logo-card {
+        width: 138px;
+        height: 138px;
+        border-radius: 34px;
+        border: 1px solid rgba(212, 168, 87, 0.22);
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.42);
+      }
+
+      .logo-card svg {
+        width: 98px;
+        height: 98px;
+      }
+
+      .splash-eyebrow {
+        margin-top: 28px;
+        color: #d4a857;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.35em;
+        text-transform: uppercase;
+      }
+
+      .splash h1 {
+        margin: 16px 0 0;
+        font-size: 44px;
+        line-height: 1.05;
+        font-weight: 780;
+        color: white;
+        letter-spacing: -0.05em;
+      }
+
+      .splash p {
+        margin: 14px auto 0;
+        max-width: 440px;
+        color: #b9ad9d;
+        font-size: 14px;
+        line-height: 25px;
+      }
+
+      .progress-bar {
+        width: 100%;
+        max-width: 410px;
+        height: 9px;
+        margin: 36px auto 0;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.10);
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #8a6b2f, #e6c57a, #d4a857, #fff0b8);
+        animation: progress 2.35s ease-in-out forwards;
+      }
+
+      .splash-steps {
+        margin-top: 26px;
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+
+      .splash-step {
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.05);
+        border-radius: 18px;
+        padding: 13px;
+        text-align: left;
+      }
+
+      .splash-step span {
+        display: block;
+        color: #8d7b5c;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+      }
+
+      .splash-step strong {
+        display: block;
+        margin-top: 5px;
+        color: #e6c57a;
+        font-size: 13px;
+      }
+
+      .login-page {
+        padding: 40px 24px;
+      }
+
+      .login-shell {
+        position: relative;
+        z-index: 2;
+        min-height: calc(100vh - 80px);
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .login-card {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1.04fr 0.96fr;
+        border-radius: 44px;
+        overflow: hidden;
+        border: 1px solid rgba(212, 168, 87, 0.24);
+        background: rgba(17, 19, 27, 0.90);
+        box-shadow: 0 45px 140px rgba(0, 0, 0, 0.50);
+      }
+
+      .login-left {
+        min-height: 720px;
+        padding: 44px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+      }
+
+      .brand-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 16px;
+        border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.06);
+        border-radius: 999px;
+        padding: 12px 18px;
+        width: fit-content;
+      }
+
+      .brand-pill-logo {
+        width: 58px;
+        height: 58px;
+        border-radius: 19px;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+      }
+
+      .brand-pill-logo svg {
+        width: 42px;
+        height: 42px;
+      }
+
+      .brand-name {
+        margin: 0;
+        color: white;
+        font-size: 15px;
+        font-weight: 820;
+      }
+
+      .brand-sub {
+        margin: 4px 0 0;
+        color: #d4a857;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      .login-eyebrow {
+        margin: 52px 0 0;
+        color: #d4a857;
+        font-size: 11px;
+        font-weight: 820;
+        letter-spacing: 0.32em;
+        text-transform: uppercase;
+      }
+
+      .login-title {
+        margin: 20px 0 0;
+        max-width: 590px;
+        color: white;
+        font-size: 52px;
+        line-height: 1.05;
+        font-weight: 780;
+        letter-spacing: -0.055em;
+      }
+
+      .login-desc {
+        max-width: 560px;
+        margin: 22px 0 0;
+        color: #b9ad9d;
+        font-size: 14px;
+        line-height: 28px;
+      }
+
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+      }
+
+      .feature-box {
+        border: 1px solid rgba(255,255,255,0.1);
+        background: rgba(255,255,255,0.06);
+        border-radius: 26px;
+        padding: 20px;
+      }
+
+      .feature-box p {
+        margin: 0;
+        color: #b9ad9d;
+        font-size: 12px;
+      }
+
+      .feature-box h3 {
+        margin: 8px 0 0;
+        color: #e6c57a;
+        font-size: 21px;
+      }
+
+      .login-right {
+        background: linear-gradient(135deg, #ffffff, #f3eee6, #eadcc8);
+        padding: 44px;
+        display: flex;
+        align-items: center;
+      }
+
+      .form-card {
+        width: 100%;
+        border-radius: 36px;
+        border: 1px solid #d8c7ad;
+        background: rgba(255,255,255,0.94);
+        padding: 36px;
+        box-shadow: 0 32px 90px rgba(68, 49, 29, 0.19);
+      }
+
+      .form-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 20px;
+        margin-bottom: 30px;
+      }
+
+      .form-head-logo {
+        width: 70px;
+        height: 70px;
+        border-radius: 23px;
+        border: 1px solid #d8c7ad;
+        background: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 9px;
+      }
+
+      .form-head-logo svg {
+        width: 50px;
+        height: 50px;
+      }
+
+      .form-eyebrow {
+        margin: 0;
+        color: #9c7439;
+        font-size: 11px;
+        font-weight: 820;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+      }
+
+      .form-title {
+        margin: 12px 0 0;
+        color: #211914;
+        font-size: 35px;
+        letter-spacing: -0.045em;
+      }
+
+      .form-desc {
+        margin: 8px 0 0;
+        color: #7d6b5a;
+        font-size: 14px;
+        line-height: 24px;
+      }
+
+      .field {
+        margin-bottom: 20px;
+      }
+
+      .field label {
+        display: block;
+        color: #211914;
+        font-size: 14px;
+        font-weight: 680;
+        margin-bottom: 8px;
+      }
+
+      .field input {
+        width: 100%;
+        border: 1px solid #dfd0b8;
+        background: #fbf8f3;
+        border-radius: 18px;
+        padding: 15px 16px;
+        color: #211914;
+        outline: none;
+        font-size: 14px;
+      }
+
+      .field input:focus {
+        border-color: #c9a45c;
+        background: white;
+        box-shadow: 0 0 0 4px rgba(201,164,92,0.12);
+      }
+
+      .error-box {
+        border: 1px solid #fecaca;
+        background: #fef2f2;
+        color: #b91c1c;
+        border-radius: 18px;
+        padding: 12px 14px;
+        font-size: 14px;
+        margin-bottom: 18px;
+      }
+
+      .login-button {
+        width: 100%;
+        border: 0;
+        border-radius: 999px;
+        background: #211914;
+        color: #e6c57a;
+        padding: 16px 20px;
+        font-size: 14px;
+        font-weight: 780;
+      }
+
+      .demo-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 22px;
+      }
+
+      .demo-button {
+        border: 1px solid #dfd0b8;
+        background: #fbf8f3;
+        border-radius: 18px;
+        padding: 14px;
+        text-align: left;
+        color: #7d6b5a;
+        font-size: 12px;
+        transition: 0.2s;
+      }
+
+      .demo-button:hover {
+        border-color: #c9a45c;
+        background: white;
+        transform: translateY(-1px);
+      }
+
+      .demo-button strong {
+        display: block;
+        color: #211914;
+        margin-bottom: 4px;
+      }
+
+      .app {
+        display: flex;
+        min-height: 100vh;
+        background: #f3eee6;
+      }
+
+      .sidebar {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: 304px;
+        height: 100vh;
+        overflow-y: auto;
+        background: linear-gradient(180deg, #0d0f15 0%, #111015 52%, #08090d 100%);
+        color: white;
+        padding: 24px 20px;
+        border-right: 1px solid rgba(212, 168, 87, 0.13);
+      }
+
+      .sidebar-brand-card {
+        border: 1px solid rgba(255,255,255,0.08);
+        background: rgba(255,255,255,0.05);
+        border-radius: 26px;
+        padding: 16px;
+        margin-bottom: 24px;
+      }
+
+      .logo-small {
+        color: #d4a857;
+        font-size: 11px;
+        font-weight: 820;
+        letter-spacing: 0.3em;
+        text-transform: uppercase;
+      }
+
+      .sidebar-title {
+        margin: 14px 0 4px;
+        font-size: 23px;
+        color: white;
+        letter-spacing: -0.04em;
+      }
+
+      .sidebar-desc {
+        color: #8d7b5c;
+        font-size: 12px;
+        line-height: 20px;
+        margin-bottom: 28px;
+      }
+
+      .group {
+        margin-bottom: 28px;
+      }
+
+      .group-title {
+        color: #8d7b5c;
+        font-size: 11px;
+        font-weight: 820;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+      }
+
+      .menu-button {
+        width: 100%;
+        display: block;
+        border: 0;
+        background: transparent;
+        color: #d9d0c2;
+        padding: 12px 14px;
+        border-radius: 16px;
+        text-align: left;
+        font-size: 14px;
+        transition: 0.2s;
+      }
+
+      .menu-button:hover {
+        background: rgba(255,255,255,0.08);
+        color: white;
+        transform: translateX(2px);
+      }
+
+      .menu-button.active {
+        background: linear-gradient(135deg, #d4a857, #f1d589);
+        color: #111;
+        font-weight: 780;
+        box-shadow: 0 12px 28px rgba(212, 168, 87, 0.18);
+      }
+
+      .main {
+        margin-left: 304px;
+        width: calc(100% - 304px);
+        min-height: 100vh;
+        padding: 30px;
+      }
+
+      .topbar {
+        min-height: 74px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+        gap: 20px;
+      }
+
+      .topbar-left p {
+        margin: 0;
+        color: #9c7439;
+        font-size: 11px;
+        font-weight: 820;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+      }
+
+      .topbar-left h2 {
+        margin: 6px 0 0;
+        color: #211914;
+        font-size: 24px;
+        letter-spacing: -0.04em;
+      }
+
+      .topbar-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .search-box {
+        width: 290px;
+        border: 1px solid #dfd0b8;
+        background: rgba(255,255,255,0.8);
+        color: #211914;
+        border-radius: 999px;
+        padding: 13px 18px;
+        outline: none;
+      }
+
+      .session-pill {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border: 1px solid #d8c7ad;
+        background: rgba(255,255,255,0.88);
+        padding: 9px 10px 9px 16px;
+        border-radius: 999px;
+      }
+
+      .session-pill p {
+        margin: 0;
+        text-align: right;
+      }
+
+      .session-restaurant {
+        color: #211914;
+        font-size: 12px;
+        font-weight: 820;
+      }
+
+      .session-role {
+        color: #8a7560;
+        font-size: 11px;
+      }
+
+      .logout-button {
+        border: 0;
+        background: #211914;
+        color: #e6c57a;
+        border-radius: 999px;
+        padding: 10px 15px;
+        font-size: 12px;
+        font-weight: 720;
+      }
+
+      .page {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .hero {
+        background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(255,250,241,0.9));
+        border: 1px solid #d8c7ad;
+        border-radius: 34px;
+        padding: 34px;
+        box-shadow: 0 20px 65px rgba(72, 52, 27, 0.08);
+      }
+
+      .hero-content {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: #9c7439;
+        font-size: 11px;
+        font-weight: 820;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+      }
+
+      .hero h1 {
+        margin: 14px 0 0;
+        color: #211914;
+        font-size: 40px;
+        letter-spacing: -0.055em;
+      }
+
+      .hero p {
+        max-width: 760px;
+        margin: 10px 0 0;
+        color: #7d6b5a;
+        font-size: 14px;
+        line-height: 25px;
+      }
+
+      .hero-button {
+        border: 0;
+        background: #211914;
+        color: #e6c57a;
+        border-radius: 999px;
+        padding: 14px 20px;
+        font-size: 13px;
+        font-weight: 750;
+      }
+
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 18px;
+      }
+
+      .card {
+        background: rgba(255,255,255,0.92);
+        border: 1px solid #e3d6c4;
+        border-radius: 30px;
+        padding: 24px;
+        box-shadow: 0 14px 45px rgba(72, 52, 27, 0.06);
+      }
+
+      .card p {
+        margin: 0;
+        color: #8a7560;
+        font-size: 14px;
+      }
+
+      .card h3 {
+        margin: 12px 0 0;
+        color: #211914;
+        font-size: 30px;
+        letter-spacing: -0.04em;
+      }
+
+      .card span {
+        display: block;
+        margin-top: 8px;
+        color: #8a7560;
+        font-size: 12px;
+      }
+
+      .panel-grid {
+        display: grid;
+        grid-template-columns: 1.25fr 0.75fr;
+        gap: 24px;
+      }
+
+      .panel {
+        background: rgba(255,255,255,0.94);
+        border: 1px solid #e3d6c4;
+        border-radius: 30px;
+        padding: 24px;
+        box-shadow: 0 14px 45px rgba(72, 52, 27, 0.06);
+      }
+
+      .panel-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 20px;
+      }
+
+      .panel h2 {
+        margin: 0;
+        color: #211914;
+        font-size: 21px;
+        letter-spacing: -0.035em;
+      }
+
+      .panel-sub {
+        margin: 5px 0 0;
+        color: #8a7560;
+        font-size: 13px;
+      }
+
+      .mini-pill {
+        border: 1px solid rgba(201,164,92,0.32);
+        background: #fff7e7;
+        color: #9c7439;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        font-weight: 750;
+      }
+
+      .bar-chart {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 12px;
+        align-items: end;
+        height: 220px;
+        padding-top: 14px;
+      }
+
+      .bar-item {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        height: 100%;
+        gap: 9px;
+      }
+
+      .bar-track {
+        position: relative;
+        width: 100%;
+        max-width: 38px;
+        height: 160px;
+        border-radius: 999px;
+        background: #f0e6d7;
+        overflow: hidden;
+      }
+
+      .bar-fill {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        border-radius: 999px;
+        background: linear-gradient(180deg, #e6c57a, #9c7439);
+      }
+
+      .bar-value {
+        color: #211914;
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .bar-label {
+        color: #8a7560;
+        font-size: 12px;
+      }
+
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .list-item {
+        background: #fbf8f3;
+        border: 1px solid rgba(227, 214, 196, 0.7);
+        border-radius: 22px;
+        padding: 16px;
+      }
+
+      .list-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      .list-title {
+        margin: 0;
+        color: #211914;
+        font-size: 14px;
+        font-weight: 760;
+      }
+
+      .list-desc {
+        margin: 6px 0 0;
+        color: #8a7560;
+        font-size: 12px;
+        line-height: 20px;
+      }
+
+      .badge {
+        white-space: nowrap;
+        border: 1px solid rgba(201,164,92,0.35);
+        background: #fff7e7;
+        color: #9c7439;
+        border-radius: 999px;
+        padding: 6px 10px;
+        font-size: 12px;
+        font-weight: 730;
+      }
+
+      .module-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+      }
+
+      .module-table th {
+        background: #f5efe6;
+        color: #8a7560;
+        font-size: 11px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        text-align: left;
+        padding: 14px;
+      }
+
+      .module-table td {
+        border-top: 1px solid #efe5d6;
+        color: #211914;
+        font-size: 14px;
+        padding: 14px;
+      }
+
+      @media (max-width: 1180px) {
+        .login-card,
+        .feature-grid,
+        .cards,
+        .panel-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .sidebar {
+          width: 260px;
+        }
+
+        .main {
+          margin-left: 260px;
+          width: calc(100% - 260px);
+        }
+
+        .topbar {
+          height: auto;
+          align-items: flex-start;
+          flex-direction: column;
+        }
+      }
+    `}</style>
   );
 }
 
-export default App;
+function HandsOffLogo() {
+  return (
+    <svg viewBox="0 0 512 512" fill="none">
+      <rect width="512" height="512" rx="118" fill="#0D0F15" />
+      <circle cx="256" cy="210" r="118" fill="url(#paint0_radial)" />
+      <path
+        d="M154 302C181 267 211 249 244 249C284 249 299 279 328 279C348 279 363 267 378 246"
+        stroke="#E6C57A"
+        strokeWidth="26"
+        strokeLinecap="round"
+      />
+      <path
+        d="M135 335C169 304 203 289 238 289C281 289 300 322 337 322C359 322 379 312 397 293"
+        stroke="#D4A857"
+        strokeWidth="22"
+        strokeLinecap="round"
+      />
+      <text
+        x="256"
+        y="408"
+        textAnchor="middle"
+        fill="#F6E3B2"
+        fontSize="54"
+        fontWeight="800"
+        fontFamily="Arial, Helvetica, sans-serif"
+      >
+        HandsOff
+      </text>
+      <defs>
+        <radialGradient
+          id="paint0_radial"
+          cx="0"
+          cy="0"
+          r="1"
+          gradientUnits="userSpaceOnUse"
+          gradientTransform="translate(256 210) rotate(90) scale(118)"
+        >
+          <stop stopColor="#7C3AED" />
+          <stop offset="0.55" stopColor="#3B2F88" />
+          <stop offset="1" stopColor="#111827" />
+        </radialGradient>
+      </defs>
+    </svg>
+  );
+}
+
+function LogoBox({ small = false }) {
+  return (
+    <div className={small ? "brand-pill-logo" : "logo-card"}>
+      <HandsOffLogo />
+    </div>
+  );
+}
+
+function SplashScreen({ title, subtitle }) {
+  return (
+    <div className="splash">
+      <AppStyles />
+
+      <div className="bg-layer grid-bg" />
+      <div className="orb orb-1 glow" />
+      <div className="orb orb-2 glow" />
+
+      <div className="splash-card fade-up">
+        <div className="logo-orbit">
+          <div className="float-logo">
+            <LogoBox />
+          </div>
+        </div>
+
+        <div className="splash-eyebrow">HandsOff</div>
+
+        <h1>{title}</h1>
+
+        <p>{subtitle}</p>
+
+        <div className="progress-bar">
+          <div className="progress-fill" />
+        </div>
+
+        <div className="splash-steps">
+          <div className="splash-step">
+            <span>01</span>
+            <strong>Kimlik kontrolü</strong>
+          </div>
+
+          <div className="splash-step">
+            <span>02</span>
+            <strong>Restoran verisi</strong>
+          </div>
+
+          <div className="splash-step">
+            <span>03</span>
+            <strong>Panel hazırlanıyor</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LoginScreen({ onLogin }) {
+  const [form, setForm] = useState({
+    email: "admin@handsoff.com",
+    password: "123456",
+  });
+
+  const [error, setError] = useState("");
+
+  function handleChange(event) {
+    const { name, value } = event.target;
+
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    setError("");
+  }
+
+  function fillDemo(email, password) {
+    setForm({ email, password });
+    setError("");
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+
+    const matchedUser = demoUsers.find(
+      (user) =>
+        user.email.toLowerCase() === form.email.toLowerCase().trim() &&
+        user.password === form.password
+    );
+
+    if (!matchedUser) {
+      setError("Mail veya şifre hatalı.");
+      return;
+    }
+
+    onLogin({
+      id: matchedUser.id,
+      email: matchedUser.email,
+      role: matchedUser.role,
+      restaurantName: matchedUser.restaurantName,
+      plan: matchedUser.plan,
+    });
+  }
+
+  return (
+    <div className="login-page">
+      <AppStyles />
+
+      <div className="bg-layer grid-bg" />
+      <div className="orb orb-1 glow" />
+      <div className="orb orb-2 glow" />
+
+      <div className="login-shell">
+        <div className="login-card fade-up">
+          <div className="login-left">
+            <div>
+              <div className="brand-pill">
+                <LogoBox small />
+
+                <div>
+                  <p className="brand-name">HandsOff</p>
+                  <p className="brand-sub">Restaurant OS</p>
+                </div>
+              </div>
+
+              <p className="login-eyebrow">Multi-tenant Restaurant Platform</p>
+
+              <h1 className="login-title">
+                Her restoran için ayrı, güvenli ve şık yönetim paneli.
+              </h1>
+
+              <p className="login-desc">
+                HandsOff; restoranların kasa, rezervasyon, stok, ekip, menü,
+                satış ve rapor süreçlerini tek sistemde toplar. Her işletme
+                sadece kendi hesabına ve kendi verilerine erişir.
+              </p>
+            </div>
+
+            <div className="feature-grid">
+              <div className="feature-box">
+                <p>Model</p>
+                <h3>SaaS</h3>
+              </div>
+
+              <div className="feature-box">
+                <p>Veri</p>
+                <h3>Ayrı</h3>
+              </div>
+
+              <div className="feature-box">
+                <p>Giriş</p>
+                <h3>Güvenli</h3>
+              </div>
+            </div>
+          </div>
+
+          <div className="login-right">
+            <div className="form-card">
+              <div className="form-head">
+                <div>
+                  <p className="form-eyebrow">HandsOff</p>
+                  <h2 className="form-title">Panele Giriş</h2>
+                  <p className="form-desc">
+                    Restoran hesabına giriş yaparak yönetim paneline eriş.
+                  </p>
+                </div>
+
+                <div className="form-head-logo">
+                  <HandsOffLogo />
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                <div className="field">
+                  <label>Mail adresi</label>
+                  <input
+                    name="email"
+                    type="email"
+                    value={form.email}
+                    onChange={handleChange}
+                    placeholder="admin@handsoff.com"
+                    required
+                  />
+                </div>
+
+                <div className="field">
+                  <label>Şifre</label>
+                  <input
+                    name="password"
+                    type="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    placeholder="Şifre"
+                    required
+                  />
+                </div>
+
+                {error && <div className="error-box">{error}</div>}
+
+                <button className="login-button">Giriş Yap</button>
+              </form>
+
+              <div className="demo-grid">
+                <button
+                  type="button"
+                  className="demo-button"
+                  onClick={() => fillDemo("admin@handsoff.com", "123456")}
+                >
+                  <strong>HandsOff Admin</strong>
+                  admin@handsoff.com
+                </button>
+
+                <button
+                  type="button"
+                  className="demo-button"
+                  onClick={() => fillDemo("demo@restaurant.com", "123456")}
+                >
+                  <strong>Demo Restoran</strong>
+                  demo@restaurant.com
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Topbar({ activePage, user, onLogout }) {
+  return (
+    <div className="topbar">
+      <div className="topbar-left">
+        <p>HandsOff Restaurant OS</p>
+        <h2>{activePage}</h2>
+      </div>
+
+      <div className="topbar-actions">
+        <input className="search-box" placeholder="Modül, rapor veya işlem ara" />
+
+        <div className="session-pill">
+          <div>
+            <p className="session-restaurant">{user.restaurantName}</p>
+            <p className="session-role">
+              {user.role} / {user.plan}
+            </p>
+          </div>
+
+          <button onClick={onLogout} className="logout-button">
+            Çıkış Yap
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ title, value, note }) {
+  return (
+    <div className="card">
+      <p>{title}</p>
+      <h3>{value}</h3>
+      <span>{note}</span>
+    </div>
+  );
+}
+
+function ListItem({ title, description, status }) {
+  return (
+    <div className="list-item">
+      <div className="list-row">
+        <div>
+          <p className="list-title">{title}</p>
+          <p className="list-desc">{description}</p>
+        </div>
+
+        <span className="badge">{status}</span>
+      </div>
+    </div>
+  );
+}
+
+function Dashboard() {
+  return (
+    <div className="page">
+      <div className="hero">
+        <div className="hero-content">
+          <div>
+            <p className="eyebrow">HandsOff / No1 Culinaria</p>
+            <h1>Operasyon merkezi</h1>
+            <p>
+              Günlük satış, kasa, rezervasyon, stok ve ekip akışını tek
+              merkezden takip et. Kritik aksiyonları, gelir eğilimini ve modül
+              durumlarını anlık gör.
+            </p>
+          </div>
+
+          <button className="hero-button">Günlük Raporu Aç</button>
+        </div>
+      </div>
+
+      <div className="cards">
+        <StatCard title="Günlük Ciro" value="128.500₺" note="+%18 dünle karşılaştırma" />
+        <StatCard title="Rezervasyon" value="64" note="12 masa onay bekliyor" />
+        <StatCard title="Açık Görev" value="12" note="4 yüksek öncelik" />
+        <StatCard title="Kasa Farkı" value="-150₺" note="Kontrol bekliyor" />
+      </div>
+
+      <div className="panel-grid">
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Haftalık gelir görünümü</h2>
+              <p className="panel-sub">
+                Adisyo, POS ve online satışların haftalık özeti.
+              </p>
+            </div>
+
+            <span className="mini-pill">Bu hafta</span>
+          </div>
+
+          <div className="bar-chart">
+            {revenueBars.map((bar) => (
+              <div className="bar-item" key={bar.label}>
+                <div className="bar-value">{bar.value}</div>
+
+                <div className="bar-track">
+                  <div className="bar-fill" style={{ height: bar.height }} />
+                </div>
+
+                <div className="bar-label">{bar.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Kritik aksiyonlar</h2>
+              <p className="panel-sub">Bugün kontrol edilmesi gereken işler.</p>
+            </div>
+
+            <span className="mini-pill">Canlı</span>
+          </div>
+
+          <div className="list">
+            <ListItem
+              title="Brunch masa planı kontrolü"
+              description="Rezervasyon sayısı ve kişi planı servis ekibiyle eşleştirilecek."
+              status="Devam Ediyor"
+            />
+
+            <ListItem
+              title="Kritik stok kontrolü"
+              description="Eksik ürünler satın alma talepleriyle karşılaştırılacak."
+              status="Aksiyon"
+            />
+
+            <ListItem
+              title="Kasa kapanış hazırlığı"
+              description="Adisyo, POS, nakit ve online ödeme toplamları kontrol edilecek."
+              status="Planlandı"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModulePage({ title }) {
+  return (
+    <div className="page">
+      <div className="hero">
+        <div className="hero-content">
+          <div>
+            <p className="eyebrow">HandsOff Module</p>
+            <h1>{title}</h1>
+            <p>
+              {title} modülü için güvenli demo ekranı. Bu alan gerçek formlar,
+              tablolar, filtreler, raporlar ve backend bağlantılarıyla
+              geliştirilecek.
+            </p>
+          </div>
+
+          <button className="hero-button">Modül Raporu</button>
+        </div>
+      </div>
+
+      <div className="cards">
+        <StatCard title="Durum" value="Hazır" note="Frontend demo ekran" />
+        <StatCard title="Veri Kaynağı" value="Demo" note="Backend sonra" />
+        <StatCard title="Yetki" value="Restoran Bazlı" note="SaaS yapı" />
+        <StatCard title="Bağlantı" value="Planlandı" note="API sonra" />
+      </div>
+
+      <div className="panel-grid">
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>{title} akış özeti</h2>
+              <p className="panel-sub">
+                Modülün üretim sürümünde sahip olacağı ana alanlar.
+              </p>
+            </div>
+
+            <span className="mini-pill">Roadmap</span>
+          </div>
+
+          <table className="module-table">
+            <thead>
+              <tr>
+                <th>Alan</th>
+                <th>Durum</th>
+                <th>Not</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr>
+                <td>Form</td>
+                <td>Planlandı</td>
+                <td>Veri girişi yapılacak</td>
+              </tr>
+
+              <tr>
+                <td>Tablo</td>
+                <td>Planlandı</td>
+                <td>Kayıt listesi gösterilecek</td>
+              </tr>
+
+              <tr>
+                <td>Rapor</td>
+                <td>Planlandı</td>
+                <td>Filtre ve export eklenecek</td>
+              </tr>
+
+              <tr>
+                <td>Backend</td>
+                <td>Sonra</td>
+                <td>Restoran bazlı API bağlanacak</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="panel">
+          <div className="panel-head">
+            <div>
+              <h2>Modül notu</h2>
+              <p className="panel-sub">Bu ekranın satış/demo mantığı.</p>
+            </div>
+
+            <span className="mini-pill">Demo</span>
+          </div>
+
+          <div className="list">
+            <ListItem
+              title="Güvenli demo ekranı"
+              description="Bu ekran dış modül import etmeden çalışır."
+              status="Aktif"
+            />
+
+            <ListItem
+              title="Restoran ayrımı"
+              description="Backend tarafında her veri restaurantId ile ayrılacak."
+              status="Planlı"
+            />
+
+            <ListItem
+              title="Sonraki adım"
+              description="Bu demo ekrandan gerçek modüle tek tek geçilecek."
+              status="Devam"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Panel({ user, onLogout }) {
+  const [activePage, setActivePage] = useState("Dashboard");
+
+  return (
+    <div className="app">
+      <AppStyles />
+
+      <aside className="sidebar">
+        <div className="sidebar-brand-card">
+          <div className="brand-pill">
+            <LogoBox small />
+
+            <div>
+              <p className="brand-name">HandsOff</p>
+              <p className="brand-sub">Restaurant OS</p>
+            </div>
+          </div>
+        </div>
+
+        <p className="logo-small">{user.restaurantName}</p>
+
+        <h2 className="sidebar-title">Yönetim Paneli</h2>
+
+        <p className="sidebar-desc">
+          Operasyon, satış, stok, ekip ve finans kontrol ekranı.
+        </p>
+
+        {menuGroups.map((group) => (
+          <div key={group.title} className="group">
+            <p className="group-title">{group.title}</p>
+
+            {group.items.map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setActivePage(item)}
+                className={
+                  activePage === item ? "menu-button active" : "menu-button"
+                }
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        ))}
+      </aside>
+
+      <main className="main">
+        <Topbar activePage={activePage} user={user} onLogout={onLogout} />
+
+        {activePage === "Dashboard" ? (
+          <Dashboard />
+        ) : (
+          <ModulePage title={activePage} />
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default function App() {
+  const [bootLoading, setBootLoading] = useState(true);
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const [session, setSession] = useState(() => {
+    const savedSession = localStorage.getItem("handsoff_session");
+
+    if (!savedSession) return null;
+
+    try {
+      return JSON.parse(savedSession);
+    } catch {
+      localStorage.removeItem("handsoff_session");
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setBootLoading(false);
+    }, 2300);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  function handleLogin(user) {
+    setLoginLoading(true);
+
+    setTimeout(() => {
+      localStorage.setItem("handsoff_session", JSON.stringify(user));
+      setSession(user);
+      setLoginLoading(false);
+    }, 1500);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("handsoff_session");
+    setSession(null);
+  }
+
+  if (bootLoading) {
+    return (
+      <SplashScreen
+        title="HandsOff açılıyor"
+        subtitle="Restoran yönetim paneli, güvenli oturum ve işletme alanı hazırlanıyor."
+      />
+    );
+  }
+
+  if (loginLoading) {
+    return (
+      <SplashScreen
+        title="Panel hazırlanıyor"
+        subtitle="Restoran hesabı yükleniyor ve operasyon ekranları açılıyor."
+      />
+    );
+  }
+
+  if (!session) {
+    return <LoginScreen onLogin={handleLogin} />;
+  }
+
+  return <Panel user={session} onLogout={handleLogout} />;
+}
