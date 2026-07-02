@@ -1,13 +1,17 @@
 ﻿const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { PrismaClient } = require("@prisma/client");
 
 dotenv.config();
 
 const app = express();
+const prisma = new PrismaClient();
+
 const PORT = 4000;
-const JWT_SECRET = "handsoff_secret_key";
+const JWT_SECRET = process.env.JWT_SECRET || "handsoff_secret_key";
 
 app.use(
   cors({
@@ -17,29 +21,6 @@ app.use(
 );
 
 app.use(express.json());
-
-const demoUsers = [
-  {
-    id: 1,
-    email: "admin@handsoff.com",
-    password: "123456",
-    name: "HandsOff Admin",
-    role: "Super Admin",
-    restaurantId: 1,
-    restaurantName: "No1 Culinaria",
-    plan: "Enterprise",
-  },
-  {
-    id: 2,
-    email: "demo@restaurant.com",
-    password: "123456",
-    name: "Demo Restaurant Admin",
-    role: "Restaurant Admin",
-    restaurantId: 2,
-    restaurantName: "Demo Restaurant",
-    plan: "Pro",
-  },
-];
 
 function createToken(user) {
   return jwt.sign(
@@ -55,7 +36,7 @@ function createToken(user) {
   );
 }
 
-function authMiddleware(req, res, next) {
+async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -69,11 +50,18 @@ function authMiddleware(req, res, next) {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const user = demoUsers.find((item) => item.id === decoded.userId);
+    const user = await prisma.user.findUnique({
+      where: {
+        id: decoded.userId,
+      },
+      include: {
+        restaurant: true,
+      },
+    });
 
-    if (!user) {
+    if (!user || !user.isActive || !user.restaurant.isActive) {
       return res.status(401).json({
-        message: "Kullanıcı bulunamadı.",
+        message: "Kullanıcı veya restoran aktif değil.",
       });
     }
 
@@ -84,6 +72,18 @@ function authMiddleware(req, res, next) {
       message: "Geçersiz token.",
     });
   }
+}
+
+function formatUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    restaurantId: user.restaurantId,
+    restaurantName: user.restaurant.name,
+    plan: user.restaurant.plan,
+  };
 }
 
 app.get("/", (req, res) => {
@@ -98,62 +98,87 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.post("/api/auth/login", (req, res) => {
-  const { email, password } = req.body;
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
 
-  if (!email || !password) {
-    return res.status(400).json({
-      message: "Mail ve şifre zorunludur.",
+    if (!email || !password) {
+      return res.status(400).json({
+        message: "Mail ve şifre zorunludur.",
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        email: email.toLowerCase().trim(),
+      },
+      include: {
+        restaurant: true,
+      },
+    });
+
+    if (!user || !user.isActive || !user.restaurant.isActive) {
+      return res.status(401).json({
+        message: "Mail veya şifre hatalı.",
+      });
+    }
+
+    const passwordIsValid = await bcrypt.compare(password, user.password);
+
+    if (!passwordIsValid) {
+      return res.status(401).json({
+        message: "Mail veya şifre hatalı.",
+      });
+    }
+
+    const token = createToken(user);
+
+    return res.json({
+      message: "Giriş başarılı.",
+      token,
+      user: formatUser(user),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Sunucu hatası.",
     });
   }
-
-  const user = demoUsers.find(
-    (item) => item.email.toLowerCase() === email.toLowerCase().trim()
-  );
-
-  if (!user) {
-    return res.status(401).json({
-      message: "Mail veya şifre hatalı.",
-    });
-  }
-
-  if (password !== user.password) {
-    return res.status(401).json({
-      message: "Mail veya şifre hatalı.",
-    });
-  }
-
-  const token = createToken(user);
-
-  return res.json({
-    message: "Giriş başarılı.",
-    token,
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      restaurantId: user.restaurantId,
-      restaurantName: user.restaurantName,
-      plan: user.plan,
-    },
-  });
 });
 
 app.get("/api/auth/me", authMiddleware, (req, res) => {
-  const user = req.user;
-
   return res.json({
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      restaurantId: user.restaurantId,
-      restaurantName: user.restaurantName,
-      plan: user.plan,
-    },
+    user: formatUser(req.user),
   });
+});
+
+app.get("/api/restaurants", authMiddleware, async (req, res) => {
+  try {
+    const restaurants = await prisma.restaurant.findMany({
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        plan: true,
+        isActive: true,
+        createdAt: true,
+      },
+    });
+
+    return res.json({
+      restaurants,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Restoranlar alınamadı.",
+    });
+  }
 });
 
 app.listen(PORT, () => {
