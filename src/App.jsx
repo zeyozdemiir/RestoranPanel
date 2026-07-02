@@ -1,24 +1,5 @@
 import { useEffect, useState } from "react";
 
-const demoUsers = [
-  {
-    id: 1,
-    email: "admin@handsoff.com",
-    password: "123456",
-    role: "Super Admin",
-    restaurantName: "No1 Culinaria",
-    plan: "Enterprise",
-  },
-  {
-    id: 2,
-    email: "demo@restaurant.com",
-    password: "123456",
-    role: "Restaurant Admin",
-    restaurantName: "Demo Restaurant",
-    plan: "Pro",
-  },
-];
-
 const menuGroups = [
   {
     title: "Her Gün",
@@ -89,6 +70,18 @@ const menuGroups = [
       "Pazarlama Merkezi",
     ],
   },
+  {
+    title: "Strateji & Rapor",
+    items: [
+      "Raporlar Merkezi",
+      "Hedef & KPI",
+      "Karar Destek",
+      "Operasyon Paneli",
+      "İleri Analiz",
+      "Raporlar & Export",
+      "Etkinlik Takvimi",
+    ],
+  },
 ];
 
 const revenueBars = [
@@ -121,6 +114,11 @@ function Styles() {
 
       button {
         cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
       }
 
       @keyframes gridMove {
@@ -1160,6 +1158,7 @@ function LoginScreen({ onLogin }) {
   });
 
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -1177,27 +1176,40 @@ function LoginScreen({ onLogin }) {
     setError("");
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
-    const matchedUser = demoUsers.find(
-      (user) =>
-        user.email.toLowerCase() === form.email.toLowerCase().trim() &&
-        user.password === form.password
-    );
+    setError("");
+    setIsSubmitting(true);
 
-    if (!matchedUser) {
-      setError("Mail veya şifre hatalı.");
-      return;
+    try {
+      const response = await fetch("http://localhost:4000/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: form.email,
+          password: form.password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Giriş başarısız.");
+        return;
+      }
+
+      onLogin({
+        token: data.token,
+        user: data.user,
+      });
+    } catch {
+      setError("Backend bağlantısı kurulamadı. Backend çalışıyor mu kontrol et.");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    onLogin({
-      id: matchedUser.id,
-      email: matchedUser.email,
-      role: matchedUser.role,
-      restaurantName: matchedUser.restaurantName,
-      plan: matchedUser.plan,
-    });
   }
 
   return (
@@ -1297,7 +1309,9 @@ function LoginScreen({ onLogin }) {
 
                 {error && <div className="error-box">{error}</div>}
 
-                <button className="login-button">Giriş Yap</button>
+                <button className="login-button" disabled={isSubmitting}>
+                  {isSubmitting ? "Kontrol ediliyor..." : "Giriş Yap"}
+                </button>
               </form>
 
               <div className="demo-grid">
@@ -1674,6 +1688,7 @@ export default function App() {
       return JSON.parse(savedSession);
     } catch {
       localStorage.removeItem("handsoff_session");
+      localStorage.removeItem("handsoff_token");
       return null;
     }
   });
@@ -1686,19 +1701,27 @@ export default function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  function handleLogin(user) {
+  function handleLogin(authData) {
     setLoginLoading(true);
 
     setTimeout(() => {
+      const user = authData?.user ? authData.user : authData;
+
+      if (authData?.token) {
+        localStorage.setItem("handsoff_token", authData.token);
+      }
+
       localStorage.setItem("handsoff_session", JSON.stringify(user));
       setSession(user);
       setLoginLoading(false);
-    }, 1500);
+    }, 900);
   }
 
   function handleLogout() {
+    localStorage.removeItem("handsoff_token");
     localStorage.removeItem("handsoff_session");
     setSession(null);
+    setLoginLoading(false);
   }
 
   let screen;
