@@ -1396,19 +1396,102 @@ function ListItem({ title, description, status }) {
 }
 
 function Dashboard({ user }) {
+  const [dashboardData, setDashboardData] = useState(null);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState("");
+
+  useEffect(() => {
+    async function fetchDashboard() {
+      try {
+        const token = localStorage.getItem("handsoff_token");
+
+        if (!token) {
+          setDashboardError("Token bulunamadı. Çıkış yapıp tekrar giriş yap.");
+          setDashboardLoading(false);
+          return;
+        }
+
+        const response = await fetch("http://localhost:4000/api/dashboard/summary", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setDashboardError(data.message || "Dashboard verisi alınamadı.");
+          setDashboardLoading(false);
+          return;
+        }
+
+        setDashboardData(data);
+      } catch {
+        setDashboardError("Backend bağlantısı kurulamadı.");
+      } finally {
+        setDashboardLoading(false);
+      }
+    }
+
+    fetchDashboard();
+  }, []);
+
+  if (dashboardLoading) {
+    return (
+      <div className="page">
+        <div className="hero">
+          <div className="hero-content">
+            <div>
+              <p className="eyebrow">HandsOff / {user.restaurantName}</p>
+
+              <h1>Dashboard yükleniyor</h1>
+
+              <p>Restoran verileri backend üzerinden hazırlanıyor.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (dashboardError) {
+    return (
+      <div className="page">
+        <div className="hero">
+          <div className="hero-content">
+            <div>
+              <p className="eyebrow">HandsOff / {user.restaurantName}</p>
+
+              <h1>Dashboard verisi alınamadı</h1>
+
+              <p>{dashboardError}</p>
+            </div>
+
+            <button
+              className="hero-button"
+              onClick={() => window.location.reload()}
+            >
+              Tekrar Dene
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <div className="hero">
         <div className="hero-content">
           <div>
-            <p className="eyebrow">HandsOff / {user.restaurantName}</p>
+            <p className="eyebrow">HandsOff / {dashboardData.restaurantName}</p>
 
             <h1>Operasyon merkezi</h1>
 
             <p>
               Günlük satış, kasa, rezervasyon, stok ve ekip akışını tek
-              merkezden takip et. Kritik aksiyonları, gelir eğilimini ve modül
-              durumlarını anlık gör.
+              merkezden takip et. Bu ekrandaki veriler artık backend üzerinden
+              restoran hesabına göre geliyor.
             </p>
           </div>
 
@@ -1417,21 +1500,14 @@ function Dashboard({ user }) {
       </div>
 
       <div className="cards">
-        <StatCard
-          title="Günlük Ciro"
-          value="128.500₺"
-          note="+%18 dünle karşılaştırma"
-        />
-
-        <StatCard
-          title="Rezervasyon"
-          value="64"
-          note="12 masa onay bekliyor"
-        />
-
-        <StatCard title="Açık Görev" value="12" note="4 yüksek öncelik" />
-
-        <StatCard title="Kasa Farkı" value="-150₺" note="Kontrol bekliyor" />
+        {dashboardData.stats.map((stat) => (
+          <StatCard
+            key={stat.title}
+            title={stat.title}
+            value={stat.value}
+            note={stat.note}
+          />
+        ))}
       </div>
 
       <div className="panel-grid">
@@ -1441,15 +1517,15 @@ function Dashboard({ user }) {
               <h2>Haftalık gelir görünümü</h2>
 
               <p className="panel-sub">
-                Adisyo, POS ve online satışların haftalık özeti.
+                Backend üzerinden restoran bazlı gelen haftalık özet.
               </p>
             </div>
 
-            <span className="mini-pill">Bu hafta</span>
+            <span className="mini-pill">Backend</span>
           </div>
 
           <div className="bar-chart">
-            {revenueBars.map((bar) => (
+            {dashboardData.revenueBars.map((bar) => (
               <div className="bar-item" key={bar.label}>
                 <div className="bar-value">{bar.value}</div>
 
@@ -1475,23 +1551,14 @@ function Dashboard({ user }) {
           </div>
 
           <div className="list">
-            <ListItem
-              title="Brunch masa planı kontrolü"
-              description="Rezervasyon sayısı ve kişi planı servis ekibiyle eşleştirilecek."
-              status="Devam Ediyor"
-            />
-
-            <ListItem
-              title="Kritik stok kontrolü"
-              description="Eksik ürünler satın alma talepleriyle karşılaştırılacak."
-              status="Aksiyon"
-            />
-
-            <ListItem
-              title="Kasa kapanış hazırlığı"
-              description="Adisyo, POS, nakit ve online ödeme toplamları kontrol edilecek."
-              status="Planlandı"
-            />
+            {dashboardData.actions.map((action) => (
+              <ListItem
+                key={action.title}
+                title={action.title}
+                description={action.description}
+                status={action.status}
+              />
+            ))}
           </div>
         </div>
       </div>
