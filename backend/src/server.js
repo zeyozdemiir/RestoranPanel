@@ -165,6 +165,7 @@ app.get("/api/dashboard/summary", authMiddleware, async (req, res) => {
         sortOrder: "asc",
       },
       select: {
+        id: true,
         title: true,
         value: true,
         note: true,
@@ -179,6 +180,7 @@ app.get("/api/dashboard/summary", authMiddleware, async (req, res) => {
         sortOrder: "asc",
       },
       select: {
+        id: true,
         label: true,
         value: true,
         height: true,
@@ -193,6 +195,7 @@ app.get("/api/dashboard/summary", authMiddleware, async (req, res) => {
         sortOrder: "asc",
       },
       select: {
+        id: true,
         title: true,
         description: true,
         status: true,
@@ -210,6 +213,61 @@ app.get("/api/dashboard/summary", authMiddleware, async (req, res) => {
 
     return res.status(500).json({
       message: "Dashboard verisi alınamadı.",
+    });
+  }
+});
+
+app.put("/api/dashboard/stats/:id", authMiddleware, async (req, res) => {
+  try {
+    const statId = Number(req.params.id);
+
+    if (!statId) {
+      return res.status(400).json({
+        message: "Geçersiz kart ID.",
+      });
+    }
+
+    const { title, value, note } = req.body;
+
+    const existingStat = await prisma.dashboardStat.findFirst({
+      where: {
+        id: statId,
+        restaurantId: req.user.restaurantId,
+      },
+    });
+
+    if (!existingStat) {
+      return res.status(404).json({
+        message: "Dashboard kartı bulunamadı.",
+      });
+    }
+
+    const updatedStat = await prisma.dashboardStat.update({
+      where: {
+        id: statId,
+      },
+      data: {
+        title: title ?? existingStat.title,
+        value: value ?? existingStat.value,
+        note: note ?? existingStat.note,
+      },
+      select: {
+        id: true,
+        title: true,
+        value: true,
+        note: true,
+      },
+    });
+
+    return res.json({
+      message: "Dashboard kartı güncellendi.",
+      stat: updatedStat,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Dashboard kartı güncellenemedi.",
     });
   }
 });

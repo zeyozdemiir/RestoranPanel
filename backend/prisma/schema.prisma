@@ -1,4 +1,4 @@
-﻿generator client {
+generator client {
   provider = "prisma-client-js"
 }
 
@@ -16,60 +16,60 @@ model Restaurant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users User[]
-  dashboardStats DashboardStat[]
+  users                User[]
+  dashboardStats       DashboardStat[]
   dashboardRevenueBars DashboardRevenueBar[]
-  dashboardActions DashboardAction[]
+  dashboardActions     DashboardAction[]
 }
 
 model User {
-  id           Int      @id @default(autoincrement())
-  email        String   @unique
-  password     String
-  name         String
-  role         String   @default("Restaurant Admin")
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("Restaurant Admin")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   restaurantId Int
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
 }
 
 model DashboardStat {
-  id           Int      @id @default(autoincrement())
-  title        String
-  value        String
-  note         String
-  sortOrder    Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  title     String
+  value     String
+  note      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   restaurantId Int
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
 }
 
 model DashboardRevenueBar {
-  id           Int      @id @default(autoincrement())
-  label        String
-  value        String
-  height       String
-  sortOrder    Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id        Int      @id @default(autoincrement())
+  label     String
+  value     String
+  height    String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   restaurantId Int
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
 }
 
 model DashboardAction {
-  id           Int      @id @default(autoincrement())
-  title        String
-  description  String
-  status       String
-  sortOrder    Int      @default(0)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  status      String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   restaurantId Int
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
