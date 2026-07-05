@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 
 backend/prisma/dev.db
+
+backend/prisma/dev.db

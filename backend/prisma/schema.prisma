@@ -16,10 +16,11 @@ model Restaurant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users                User[]
-  dashboardStats       DashboardStat[]
-  dashboardRevenueBars DashboardRevenueBar[]
-  dashboardActions     DashboardAction[]
+users                User[]
+dashboardStats       DashboardStat[]
+dashboardRevenueBars DashboardRevenueBar[]
+dashboardActions     DashboardAction[]
+dailyReports         DailyReport[]
 }
 
 model User {
@@ -73,4 +74,21 @@ model DashboardAction {
 
   restaurantId Int
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+model DailyReport {
+  id               Int      @id @default(autoincrement())
+  reportDate       DateTime
+  revenue          Float    @default(0)
+  reservationCount Int      @default(0)
+  openTaskCount    Int      @default(0)
+  cashDifference   Float    @default(0)
+  note             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@unique([restaurantId, reportDate])
 }
