@@ -16,11 +16,13 @@ model Restaurant {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-users                User[]
-dashboardStats       DashboardStat[]
-dashboardRevenueBars DashboardRevenueBar[]
-dashboardActions     DashboardAction[]
-dailyReports         DailyReport[]
+  users                User[]
+  dashboardStats       DashboardStat[]
+  dashboardRevenueBars DashboardRevenueBar[]
+  dashboardActions     DashboardAction[]
+  dailyReports         DailyReport[]
+  uploadedDocuments    UploadedDocument[]
+  expenses             Expense[]
 }
 
 model User {
@@ -35,6 +37,8 @@ model User {
 
   restaurantId Int
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  uploadedDocuments UploadedDocument[]
 }
 
 model DashboardStat {
@@ -91,4 +95,63 @@ model DailyReport {
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
 
   @@unique([restaurantId, reportDate])
+}
+
+model UploadedDocument {
+  id           Int      @id @default(autoincrement())
+  originalName String
+  storedName   String
+  mimeType     String
+  sizeBytes    Int
+  path         String
+
+  documentType String   @default("ADISYON_REPORT")
+  status       String   @default("UPLOADED")
+
+  aiRead       Boolean  @default(false)
+  processed    Boolean  @default(false)
+
+  extractedData String?
+  note          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  uploadedByUserId Int
+  uploadedByUser   User @relation(fields: [uploadedByUserId], references: [id])
+
+  expenses Expense[]
+}
+
+model Expense {
+  id Int @id @default(autoincrement())
+
+  supplierName String @default("AI okuma bekliyor")
+  invoiceNo    String?
+  invoiceDate  DateTime?
+
+  category      String @default("Fatura")
+  description   String?
+  netAmount     Float  @default(0)
+  taxAmount     Float  @default(0)
+  totalAmount   Float  @default(0)
+  currency      String @default("TRY")
+
+  paymentStatus String @default("UNPAID")
+  status        String @default("DRAFT")
+  source        String @default("UPLOAD")
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  uploadedDocumentId Int?
+  uploadedDocument   UploadedDocument? @relation(fields: [uploadedDocumentId], references: [id])
 }

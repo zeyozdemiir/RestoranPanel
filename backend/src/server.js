@@ -1,8 +1,11 @@
-﻿const express = require("express");
+﻿const fs = require("fs");
+const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const multer = require("multer");
+const nodePath = require("path");
 const { PrismaClient } = require("@prisma/client");
 
 dotenv.config();
@@ -21,6 +24,45 @@ app.use(
 );
 
 app.use(express.json());
+
+const uploadDir = nodePath.join(__dirname, "..", "uploads");
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const uploadStorage = multer.diskStorage({
+  destination: function (req, file, callback) {
+    callback(null, uploadDir);
+  },
+  filename: function (req, file, callback) {
+    const safeOriginalName = file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+    const uniqueName = Date.now() + "-" + safeOriginalName;
+
+    callback(null, uniqueName);
+  },
+});
+
+const upload = multer({
+  storage: uploadStorage,
+  limits: {
+    fileSize: 15 * 1024 * 1024,
+  },
+  fileFilter: function (req, file, callback) {
+    const allowedTypes = [
+      "application/pdf",
+      "application/vnd.ms-excel",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "text/csv",
+    ];
+
+    if (!allowedTypes.includes(file.mimetype)) {
+      return callback(new Error("Sadece PDF, Excel veya CSV dosyasi yuklenebilir."));
+    }
+
+    callback(null, true);
+  },
+});
 
 function createToken(user) {
   return jwt.sign(
@@ -67,7 +109,7 @@ async function authMiddleware(req, res, next) {
 
     req.user = user;
     next();
-  } catch (error) {
+  } catch {
     return res.status(401).json({
       message: "Gecersiz token.",
     });
@@ -103,9 +145,11 @@ function formatDateTR(date) {
 function formatMoney(value) {
   const number = Number(value || 0);
 
-  return new Intl.NumberFormat("tr-TR", {
-    maximumFractionDigits: 0,
-  }).format(number) + "\u20ba";
+  return (
+    new Intl.NumberFormat("tr-TR", {
+      maximumFractionDigits: 0,
+    }).format(number) + "₺"
+  );
 }
 
 function formatShortMoney(value) {
@@ -116,6 +160,48 @@ function formatShortMoney(value) {
   }
 
   return String(number);
+}
+
+function formatDailyReport(report) {
+  return {
+    id: report.id,
+    reportDate: formatDateTR(report.reportDate),
+    revenue: report.revenue,
+    reservationCount: report.reservationCount,
+    openTaskCount: report.openTaskCount,
+    cashDifference: report.cashDifference,
+    note: report.note,
+    createdAt: report.createdAt,
+    updatedAt: report.updatedAt,
+  };
+}
+
+function formatExpense(expense) {
+  return {
+    id: expense.id,
+    supplierName: expense.supplierName,
+    invoiceNo: expense.invoiceNo,
+    invoiceDate: expense.invoiceDate,
+    category: expense.category,
+    description: expense.description,
+    netAmount: expense.netAmount,
+    taxAmount: expense.taxAmount,
+    totalAmount: expense.totalAmount,
+    currency: expense.currency,
+    paymentStatus: expense.paymentStatus,
+    status: expense.status,
+    source: expense.source,
+    note: expense.note,
+    createdAt: expense.createdAt,
+    updatedAt: expense.updatedAt,
+    uploadedDocument: expense.uploadedDocument
+      ? {
+          id: expense.uploadedDocument.id,
+          originalName: expense.uploadedDocument.originalName,
+          documentType: expense.uploadedDocument.documentType,
+        }
+      : null,
+  };
 }
 
 async function getFallbackDashboard(user) {
@@ -234,7 +320,7 @@ async function getDailyReportDashboard(user) {
     stats: [
       {
         id: "daily-revenue",
-        title: "G\u00fcnl\u00fck Ciro",
+        title: "Gunluk Ciro",
         value: formatMoney(latestReport.revenue),
         note: `Son rapor tarihi: ${formatDateTR(latestReport.reportDate)}`,
       },
@@ -242,17 +328,17 @@ async function getDailyReportDashboard(user) {
         id: "daily-reservation",
         title: "Rezervasyon",
         value: String(latestReport.reservationCount),
-        note: "Son kaydedilen g\u00fcnl\u00fck rapordan alindi",
+        note: "Son kaydedilen gunluk rapordan alindi",
       },
       {
         id: "daily-open-task",
-        title: "A\u00e7\u0131k G\u00f6rev",
+        title: "Acik Gorev",
         value: String(latestReport.openTaskCount),
         note: "Operasyon kaydindan alindi",
       },
       {
         id: "daily-cash-difference",
-        title: "Kasa Fark\u0131",
+        title: "Kasa Farki",
         value: formatMoney(latestReport.cashDifference),
         note: latestReport.cashDifference === 0 ? "Kasa dengede" : "Kontrol edilmeli",
       },
@@ -261,31 +347,18 @@ async function getDailyReportDashboard(user) {
     actions: [
       {
         id: "daily-report-note",
-        title: "G\u00fcnl\u00fck rapor notu",
-        description: latestReport.note || "Bu g\u00fcn i\u00e7in not girilmemi\u015f.",
+        title: "Gunluk rapor notu",
+        description: latestReport.note || "Bu gun icin not girilmemis.",
         status: "Rapor",
       },
       {
         id: "daily-report-check",
-        title: "Rapor kontrol\u00fc",
-        description: "Ciro, rezervasyon, g\u00f6rev ve kasa fark\u0131 g\u00fcnl\u00fck rapordan hesaplan\u0131yor.",
-        status: "Canl\u0131",
+        title: "Rapor kontrolu",
+        description:
+          "Ciro, rezervasyon, gorev ve kasa farki gunluk rapordan hesaplaniyor.",
+        status: "Canli",
       },
     ],
-  };
-}
-
-function formatDailyReport(report) {
-  return {
-    id: report.id,
-    reportDate: formatDateTR(report.reportDate),
-    revenue: report.revenue,
-    reservationCount: report.reservationCount,
-    openTaskCount: report.openTaskCount,
-    cashDifference: report.cashDifference,
-    note: report.note,
-    createdAt: report.createdAt,
-    updatedAt: report.updatedAt,
   };
 }
 
@@ -460,57 +533,500 @@ app.post("/api/daily-reports", authMiddleware, async (req, res) => {
   }
 });
 
-app.put("/api/dashboard/stats/:id", authMiddleware, async (req, res) => {
-  try {
-    const statId = Number(req.params.id);
+app.post("/api/report-uploads", authMiddleware, function (req, res) {
+  upload.single("file")(req, res, async function (error) {
+    try {
+      if (error) {
+        return res.status(400).json({
+          message: error.message || "Rapor dosyasi yuklenemedi.",
+        });
+      }
 
-    if (!statId) {
-      return res.status(400).json({
-        message: "Gecersiz kart ID.",
+      if (!req.file) {
+        return res.status(400).json({
+          message: "Dosya bulunamadi.",
+        });
+      }
+
+      const documentType = req.body.documentType || "ADISYON_REPORT";
+
+      const uploadedDocument = await prisma.uploadedDocument.create({
+        data: {
+          originalName: req.file.originalname,
+          storedName: req.file.filename,
+          mimeType: req.file.mimetype,
+          sizeBytes: req.file.size,
+          path: req.file.path,
+          documentType,
+          status: "UPLOADED",
+          aiRead: false,
+          processed: false,
+          restaurantId: req.user.restaurantId,
+          uploadedByUserId: req.user.id,
+        },
+      });
+
+      if (
+        documentType === "EXPENSE_INVOICE" ||
+        documentType === "STOCK_INVOICE"
+      ) {
+        await prisma.expense.create({
+          data: {
+            restaurantId: req.user.restaurantId,
+            uploadedDocumentId: uploadedDocument.id,
+            supplierName: "AI okuma bekliyor",
+            category:
+              documentType === "STOCK_INVOICE"
+                ? "Stok / Satin Alma"
+                : "Gider Faturasi",
+            description: req.file.originalname,
+            netAmount: 0,
+            taxAmount: 0,
+            totalAmount: 0,
+            paymentStatus: "UNPAID",
+            status: "WAITING_AI",
+            source: "UPLOAD",
+            note: "Fatura yuklendi. AI okuma ve kullanici onayi bekliyor.",
+          },
+        });
+
+        await prisma.uploadedDocument.update({
+          where: {
+            id: uploadedDocument.id,
+          },
+          data: {
+            status: "EXPENSE_DRAFT_CREATED",
+          },
+        });
+      }
+
+      return res.json({
+        message: "Dosya yuklendi ve veritabanina kaydedildi.",
+        file: {
+          originalName: req.file.originalname,
+          storedName: req.file.filename,
+          size: req.file.size,
+          mimeType: req.file.mimetype,
+          path: req.file.path,
+        },
+        document: uploadedDocument,
+      });
+    } catch (saveError) {
+      console.error(saveError);
+
+      return res.status(500).json({
+        message: "Dosya yuklendi ama veritabanina kaydedilemedi.",
       });
     }
+  });
+});
 
-    const { title, value, note } = req.body;
-
-    const existingStat = await prisma.dashboardStat.findFirst({
+app.get("/api/report-uploads", authMiddleware, async (req, res) => {
+  try {
+    const documents = await prisma.uploadedDocument.findMany({
       where: {
-        id: statId,
         restaurantId: req.user.restaurantId,
       },
-    });
-
-    if (!existingStat) {
-      return res.status(404).json({
-        message: "Dashboard karti bulunamadi.",
-      });
-    }
-
-    const updatedStat = await prisma.dashboardStat.update({
-      where: {
-        id: statId,
-      },
-      data: {
-        title: title ?? existingStat.title,
-        value: value ?? existingStat.value,
-        note: note ?? existingStat.note,
+      orderBy: {
+        createdAt: "desc",
       },
       select: {
         id: true,
-        title: true,
-        value: true,
-        note: true,
+        originalName: true,
+        storedName: true,
+        mimeType: true,
+        sizeBytes: true,
+        documentType: true,
+        status: true,
+        aiRead: true,
+        processed: true,
+        createdAt: true,
       },
     });
 
     return res.json({
-      message: "Dashboard karti guncellendi.",
-      stat: updatedStat,
+      documents,
     });
   } catch (error) {
     console.error(error);
 
     return res.status(500).json({
-      message: "Dashboard karti guncellenemedi.",
+      message: "Yuklenen dosyalar alinamadi.",
+    });
+  }
+});
+
+app.get("/api/expenses", authMiddleware, async (req, res) => {
+  try {
+    const expenses = await prisma.expense.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        uploadedDocument: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return res.json({
+      expenses: expenses.map(formatExpense),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Gider kayitlari alinamadi.",
+    });
+  }
+});
+
+app.post("/api/expenses", authMiddleware, async (req, res) => {
+  try {
+    const {
+      supplierName,
+      invoiceNo,
+      invoiceDate,
+      category,
+      description,
+      netAmount,
+      taxAmount,
+      totalAmount,
+      paymentStatus,
+      note,
+    } = req.body;
+
+    const expense = await prisma.expense.create({
+      data: {
+        restaurantId: req.user.restaurantId,
+        supplierName: supplierName || "Manuel gider",
+        invoiceNo: invoiceNo || null,
+        invoiceDate: invoiceDate ? new Date(invoiceDate) : null,
+        category: category || "Fatura",
+        description: description || null,
+        netAmount: Number(netAmount || 0),
+        taxAmount: Number(taxAmount || 0),
+        totalAmount: Number(totalAmount || 0),
+        paymentStatus: paymentStatus || "UNPAID",
+        status: "APPROVED",
+        source: "MANUAL",
+        note: note || null,
+      },
+      include: {
+        uploadedDocument: true,
+      },
+    });
+
+    return res.json({
+      message: "Gider kaydi olusturuldu.",
+      expense: formatExpense(expense),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Gider kaydi olusturulamadi.",
+    });
+  }
+});
+
+
+app.put("/api/expenses/:id", authMiddleware, async (req, res) => {
+  try {
+    const expenseId = Number(req.params.id);
+
+    if (!expenseId) {
+      return res.status(400).json({
+        message: "Gecersiz gider ID.",
+      });
+    }
+
+    const existingExpense = await prisma.expense.findFirst({
+      where: {
+        id: expenseId,
+        restaurantId: req.user.restaurantId,
+      },
+    });
+
+    if (!existingExpense) {
+      return res.status(404).json({
+        message: "Gider kaydi bulunamadi.",
+      });
+    }
+
+    const {
+      supplierName,
+      invoiceNo,
+      invoiceDate,
+      category,
+      description,
+      netAmount,
+      taxAmount,
+      totalAmount,
+      paymentStatus,
+      status,
+      note,
+    } = req.body;
+
+    const updatedExpense = await prisma.expense.update({
+      where: {
+        id: expenseId,
+      },
+      data: {
+        supplierName: supplierName ?? existingExpense.supplierName,
+        invoiceNo: invoiceNo === "" ? null : invoiceNo ?? existingExpense.invoiceNo,
+        invoiceDate:
+          invoiceDate === ""
+            ? null
+            : invoiceDate
+              ? new Date(invoiceDate)
+              : existingExpense.invoiceDate,
+        category: category ?? existingExpense.category,
+        description:
+          description === "" ? null : description ?? existingExpense.description,
+        netAmount:
+          netAmount === undefined ? existingExpense.netAmount : Number(netAmount || 0),
+        taxAmount:
+          taxAmount === undefined ? existingExpense.taxAmount : Number(taxAmount || 0),
+        totalAmount:
+          totalAmount === undefined
+            ? existingExpense.totalAmount
+            : Number(totalAmount || 0),
+        paymentStatus: paymentStatus ?? existingExpense.paymentStatus,
+        status: status ?? existingExpense.status,
+        note: note === "" ? null : note ?? existingExpense.note,
+      },
+      include: {
+        uploadedDocument: true,
+      },
+    });
+
+    return res.json({
+      message: "Gider kaydi guncellendi.",
+      expense: formatExpense(updatedExpense),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Gider kaydi guncellenemedi.",
+    });
+  }
+});
+
+app.post("/api/report-uploads/:id/create-expense", authMiddleware, async (req, res) => {
+  try {
+    const documentId = Number(req.params.id);
+
+    if (!documentId) {
+      return res.status(400).json({
+        message: "Gecersiz belge ID.",
+      });
+    }
+
+    const document = await prisma.uploadedDocument.findFirst({
+      where: {
+        id: documentId,
+        restaurantId: req.user.restaurantId,
+      },
+    });
+
+    if (!document) {
+      return res.status(404).json({
+        message: "Belge bulunamadi.",
+      });
+    }
+
+    const existingExpense = await prisma.expense.findFirst({
+      where: {
+        uploadedDocumentId: document.id,
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        uploadedDocument: true,
+      },
+    });
+
+    if (existingExpense) {
+      return res.json({
+        message: "Bu belge icin gider taslagi zaten var.",
+        expense: formatExpense(existingExpense),
+      });
+    }
+
+    const expense = await prisma.expense.create({
+      data: {
+        restaurantId: req.user.restaurantId,
+        uploadedDocumentId: document.id,
+        supplierName: "AI okuma bekliyor",
+        category:
+          document.documentType === "STOCK_INVOICE"
+            ? "Stok / Satin Alma"
+            : "Gider Faturasi",
+        description: document.originalName,
+        netAmount: 0,
+        taxAmount: 0,
+        totalAmount: 0,
+        paymentStatus: "UNPAID",
+        status: "WAITING_AI",
+        source: "UPLOAD",
+        note: "Fatura yuklendi. AI okuma ve kullanici onayi bekliyor.",
+      },
+      include: {
+        uploadedDocument: true,
+      },
+    });
+
+    await prisma.uploadedDocument.update({
+      where: {
+        id: document.id,
+      },
+      data: {
+        status: "EXPENSE_DRAFT_CREATED",
+      },
+    });
+
+    return res.json({
+      message: "Belgeden gider taslagi olusturuldu.",
+      expense: formatExpense(expense),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Belgeden gider taslagi olusturulamadi.",
+    });
+  }
+});
+
+
+function getMonthDateRange(monthValue) {
+  const now = new Date();
+  const fallbackMonth = String(now.getMonth() + 1).padStart(2, "0");
+  const fallback = now.getFullYear() + "-" + fallbackMonth;
+
+  const month = monthValue || fallback;
+  const parts = String(month).split("-");
+  const year = Number(parts[0]);
+  const monthIndex = Number(parts[1]) - 1;
+
+  const startDate = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0));
+  const endDate = new Date(Date.UTC(year, monthIndex + 1, 1, 0, 0, 0));
+
+  return {
+    month,
+    startDate,
+    endDate,
+  };
+}
+
+app.get("/api/finance/monthly-summary", authMiddleware, async (req, res) => {
+  try {
+    const { month, startDate, endDate } = getMonthDateRange(req.query.month);
+
+    const dailyReports = await prisma.dailyReport.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+        reportDate: {
+          gte: startDate,
+          lt: endDate,
+        },
+      },
+      orderBy: {
+        reportDate: "asc",
+      },
+    });
+
+    const expenses = await prisma.expense.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+        OR: [
+          {
+            invoiceDate: {
+              gte: startDate,
+              lt: endDate,
+            },
+          },
+          {
+            invoiceDate: null,
+            createdAt: {
+              gte: startDate,
+              lt: endDate,
+            },
+          },
+        ],
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    const totalRevenue = dailyReports.reduce((total, report) => {
+      return total + Number(report.revenue || 0);
+    }, 0);
+
+    const totalExpenses = expenses.reduce((total, expense) => {
+      return total + Number(expense.totalAmount || 0);
+    }, 0);
+
+    const approvedExpenses = expenses
+      .filter((expense) => expense.status === "APPROVED")
+      .reduce((total, expense) => {
+        return total + Number(expense.totalAmount || 0);
+      }, 0);
+
+    const unpaidExpenses = expenses
+      .filter((expense) => expense.paymentStatus === "UNPAID")
+      .reduce((total, expense) => {
+        return total + Number(expense.totalAmount || 0);
+      }, 0);
+
+    const categoryMap = new Map();
+
+    expenses.forEach((expense) => {
+      const category = expense.category || "Diger";
+      const current = categoryMap.get(category) || {
+        category,
+        count: 0,
+        totalAmount: 0,
+      };
+
+      current.count += 1;
+      current.totalAmount += Number(expense.totalAmount || 0);
+
+      categoryMap.set(category, current);
+    });
+
+    const expenseCategories = Array.from(categoryMap.values()).sort(
+      (a, b) => b.totalAmount - a.totalAmount
+    );
+
+    return res.json({
+      month,
+      totals: {
+        totalRevenue,
+        totalExpenses,
+        approvedExpenses,
+        unpaidExpenses,
+        netProfit: totalRevenue - totalExpenses,
+        reportCount: dailyReports.length,
+        expenseCount: expenses.length,
+      },
+      dailyReports: dailyReports.map((report) => ({
+        id: report.id,
+        reportDate: formatDateTR(report.reportDate),
+        revenue: report.revenue,
+        reservationCount: report.reservationCount,
+        cashDifference: report.cashDifference,
+      })),
+      expenseCategories,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Aylik finans ozeti alinamadi.",
     });
   }
 });

@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import DailyReportPage from "./DailyReportPage";
+import ReportUploadPage from "./ReportUploadPage";
+import ExpenseManagementPage from "./ExpenseManagementPage";
+import ProfitLossPage from "./ProfitLossPage";
 
 const menuGroups = [
   {
@@ -1735,7 +1739,19 @@ function Panel({ user, onLogout }) {
         {activePage === "Dashboard" ? (
           <Dashboard user={user} />
         ) : (
+          activePage === "\u0047\u00fcnl\u00fck Operasyon" ? (
+          <DailyReportPage user={user} />
+        ) : activePage === "Adisyo Rapor Y\u00fckle" ? (
+          <ReportUploadPage user={user} />
+        ) : activePage === "Gider Y\u00f6netimi" ? (
+          <ExpenseManagementPage user={user} />
+        ) : (
+          activePage === "Kar Zarar" || activePage === "Kâr Zarar" ? (
+          <ProfitLossPage user={user} />
+        ) : (
           <ModulePage title={activePage} />
+        )
+        )
         )}
       </main>
     </div>
