@@ -210,6 +210,57 @@ export default function ExpenseManagementPage({ user }) {
     }
   }
 
+  async function handleCancelExpense(expense) {
+    const confirmed = window.confirm(
+      "Bu gider kaydı iptal edilecek. Aylık toplamdan düşecek ama kayıt listede İptal olarak kalacak. Devam edilsin mi?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch(
+        `http://localhost:4000/api/expenses/${expense.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify({
+            status: "CANCELLED",
+            note: expense.note
+              ? expense.note + "\nKayıt iptal edildi."
+              : "Kayıt iptal edildi.",
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Gider kaydı iptal edilemedi.");
+        return;
+      }
+
+      setMessage("Gider kaydı iptal edildi.");
+      setSelectedExpense(null);
+      setForm(emptyForm);
+      await fetchExpenses();
+    } catch {
+      setError("Gider kaydı iptal edilirken backend bağlantısı kurulamadı.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const monthOptions = useMemo(() => {
     const keys = expenses.map((expense) =>
       getMonthKey(expense.invoiceDate || expense.createdAt)
@@ -228,34 +279,38 @@ export default function ExpenseManagementPage({ user }) {
     });
   }, [expenses, selectedMonth]);
 
-  const monthlyTotal = filteredExpenses.reduce((total, expense) => {
+  const activeExpenses = useMemo(() => {
+    return filteredExpenses.filter((expense) => expense.status !== "CANCELLED");
+  }, [filteredExpenses]);
+
+  const monthlyTotal = activeExpenses.reduce((total, expense) => {
     return total + Number(expense.totalAmount || 0);
   }, 0);
 
-  const approvedTotal = filteredExpenses
+  const approvedTotal = activeExpenses
     .filter((expense) => expense.status === "APPROVED")
     .reduce((total, expense) => total + Number(expense.totalAmount || 0), 0);
 
-  const waitingAiCount = filteredExpenses.filter(
+  const waitingAiCount = activeExpenses.filter(
     (expense) => expense.status === "WAITING_AI"
   ).length;
 
-  const unpaidCount = filteredExpenses.filter(
+  const unpaidCount = activeExpenses.filter(
     (expense) => expense.paymentStatus === "UNPAID"
   ).length;
 
-  const unpaidTotal = filteredExpenses
+  const unpaidTotal = activeExpenses
     .filter((expense) => expense.paymentStatus === "UNPAID")
     .reduce((total, expense) => total + Number(expense.totalAmount || 0), 0);
 
-  const paidTotal = filteredExpenses
+  const paidTotal = activeExpenses
     .filter((expense) => expense.paymentStatus === "PAID")
     .reduce((total, expense) => total + Number(expense.totalAmount || 0), 0);
 
   const categorySummary = useMemo(() => {
     const summaryMap = new Map();
 
-    filteredExpenses.forEach((expense) => {
+    activeExpenses.forEach((expense) => {
       const category = expense.category || "Diğer";
       const current = summaryMap.get(category) || {
         category,
@@ -284,7 +339,7 @@ export default function ExpenseManagementPage({ user }) {
     return Array.from(summaryMap.values()).sort(
       (a, b) => b.totalAmount - a.totalAmount
     );
-  }, [filteredExpenses]);
+  }, [activeExpenses]);
 
   return (
     <div className="page">
@@ -737,14 +792,31 @@ export default function ExpenseManagementPage({ user }) {
               filteredExpenses.map((expense) => (
                 <tr key={expense.id}>
                   <td>
-                    <button
-                      type="button"
-                      className="hero-button"
-                      onClick={() => handleSelectExpense(expense)}
-                      style={{ padding: "8px 12px", borderRadius: 12 }}
-                    >
-                      Düzenle
-                    </button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        type="button"
+                        className="hero-button"
+                        onClick={() => handleSelectExpense(expense)}
+                        style={{ padding: "8px 12px", borderRadius: 12 }}
+                      >
+                        Düzenle
+                      </button>
+
+                      {expense.status !== "CANCELLED" && (
+                        <button
+                          type="button"
+                          className="hero-button"
+                          onClick={() => handleCancelExpense(expense)}
+                          style={{
+                            padding: "8px 12px",
+                            borderRadius: 12,
+                            background: "#991b1b",
+                          }}
+                        >
+                          İptal Et
+                        </button>
+                      )}
+                    </div>
                   </td>
 
                   <td>{expense.supplierName}</td>
