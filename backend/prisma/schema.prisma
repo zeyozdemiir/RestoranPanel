@@ -23,6 +23,7 @@ model Restaurant {
   dailyReports         DailyReport[]
   uploadedDocuments    UploadedDocument[]
   expenses             Expense[]
+  suppliers            Supplier[]
 }
 
 model User {
@@ -154,4 +155,23 @@ model Expense {
 
   uploadedDocumentId Int?
   uploadedDocument   UploadedDocument? @relation(fields: [uploadedDocumentId], references: [id])
+}
+
+model Supplier {
+  id          Int      @id @default(autoincrement())
+  name        String
+  taxNumber   String?
+  iban        String?
+  phone       String?
+  email       String?
+  address     String?
+  category    String   @default("Genel")
+  contactName String?
+  note        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
 }

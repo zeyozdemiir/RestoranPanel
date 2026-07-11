@@ -1031,6 +1031,168 @@ app.get("/api/finance/monthly-summary", authMiddleware, async (req, res) => {
   }
 });
 
+
+function formatSupplier(supplier) {
+  return {
+    id: supplier.id,
+    name: supplier.name,
+    taxNumber: supplier.taxNumber,
+    iban: supplier.iban,
+    phone: supplier.phone,
+    email: supplier.email,
+    address: supplier.address,
+    category: supplier.category,
+    contactName: supplier.contactName,
+    note: supplier.note,
+    isActive: supplier.isActive,
+    createdAt: supplier.createdAt,
+    updatedAt: supplier.updatedAt,
+  };
+}
+
+app.get("/api/suppliers", authMiddleware, async (req, res) => {
+  try {
+    const suppliers = await prisma.supplier.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return res.json({
+      suppliers: suppliers.map(formatSupplier),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Tedarikciler alinamadi.",
+    });
+  }
+});
+
+app.post("/api/suppliers", authMiddleware, async (req, res) => {
+  try {
+    const {
+      name,
+      taxNumber,
+      iban,
+      phone,
+      email,
+      address,
+      category,
+      contactName,
+      note,
+    } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({
+        message: "Tedarikci adi zorunludur.",
+      });
+    }
+
+    const supplier = await prisma.supplier.create({
+      data: {
+        restaurantId: req.user.restaurantId,
+        name: String(name).trim(),
+        taxNumber: taxNumber || null,
+        iban: iban || null,
+        phone: phone || null,
+        email: email || null,
+        address: address || null,
+        category: category || "Genel",
+        contactName: contactName || null,
+        note: note || null,
+        isActive: true,
+      },
+    });
+
+    return res.json({
+      message: "Tedarikci kaydi olusturuldu.",
+      supplier: formatSupplier(supplier),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Tedarikci kaydi olusturulamadi.",
+    });
+  }
+});
+
+app.put("/api/suppliers/:id", authMiddleware, async (req, res) => {
+  try {
+    const supplierId = Number(req.params.id);
+
+    if (!supplierId) {
+      return res.status(400).json({
+        message: "Gecersiz tedarikci ID.",
+      });
+    }
+
+    const existingSupplier = await prisma.supplier.findFirst({
+      where: {
+        id: supplierId,
+        restaurantId: req.user.restaurantId,
+      },
+    });
+
+    if (!existingSupplier) {
+      return res.status(404).json({
+        message: "Tedarikci bulunamadi.",
+      });
+    }
+
+    const {
+      name,
+      taxNumber,
+      phone,
+      email,
+      address,
+      category,
+      contactName,
+      note,
+      isActive,
+    } = req.body;
+
+    const updatedSupplier = await prisma.supplier.update({
+      where: {
+        id: supplierId,
+      },
+      data: {
+        name: name ?? existingSupplier.name,
+        taxNumber:
+          taxNumber === "" ? null : taxNumber ?? existingSupplier.taxNumber,
+        iban: iban === "" ? null : iban ?? existingSupplier.iban,
+        phone: phone === "" ? null : phone ?? existingSupplier.phone,
+        email: email === "" ? null : email ?? existingSupplier.email,
+        address: address === "" ? null : address ?? existingSupplier.address,
+        category: category ?? existingSupplier.category,
+        contactName:
+          contactName === ""
+            ? null
+            : contactName ?? existingSupplier.contactName,
+        note: note === "" ? null : note ?? existingSupplier.note,
+        isActive:
+          typeof isActive === "boolean" ? isActive : existingSupplier.isActive,
+      },
+    });
+
+    return res.json({
+      message: "Tedarikci kaydi guncellendi.",
+      supplier: formatSupplier(updatedSupplier),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Tedarikci kaydi guncellenemedi.",
+    });
+  }
+});
+
 app.get("/api/restaurants", authMiddleware, async (req, res) => {
   try {
     const restaurants = await prisma.restaurant.findMany({

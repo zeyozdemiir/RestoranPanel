@@ -3,6 +3,7 @@ import DailyReportPage from "./DailyReportPage";
 import ReportUploadPage from "./ReportUploadPage";
 import ExpenseManagementPage from "./ExpenseManagementPage";
 import ProfitLossPage from "./ProfitLossPage";
+import SuppliersPage from "./SuppliersPage";
 
 const menuGroups = [
   {
@@ -1749,7 +1750,14 @@ function Panel({ user, onLogout }) {
           activePage === "Kar Zarar" || activePage === "Kâr Zarar" ? (
           <ProfitLossPage user={user} />
         ) : (
+          activePage === "Tedarikçiler" ||
+        activePage === "Tedarikçi Yönetimi" ||
+        activePage === "Tedarikci Yönetimi" ||
+        activePage === "Tedarikci Yonetimi" ? (
+          <SuppliersPage user={user} />
+        ) : (
           <ModulePage title={activePage} />
+        )
         )
         )
         )}
