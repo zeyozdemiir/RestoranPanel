@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 
 function formatMoney(value) {
   return new Intl.NumberFormat("tr-TR", {
@@ -69,6 +69,7 @@ const emptyForm = {
 
 export default function ExpenseManagementPage({ user }) {
   const [expenses, setExpenses] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(getMonthKey(new Date()));
   const [selectedExpense, setSelectedExpense] = useState(null);
   const [form, setForm] = useState(emptyForm);
@@ -79,7 +80,28 @@ export default function ExpenseManagementPage({ user }) {
 
   useEffect(() => {
     fetchExpenses();
+    fetchSuppliers();
   }, []);
+
+  async function fetchSuppliers() {
+    try {
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch("http://localhost:4000/api/suppliers", {
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuppliers(data.suppliers || []);
+      }
+    } catch {
+      setSuppliers([]);
+    }
+  }
 
   async function fetchExpenses() {
     try {
@@ -114,6 +136,13 @@ export default function ExpenseManagementPage({ user }) {
     setForm(emptyForm);
     setMessage("");
     setError("");
+  }
+
+  function handleSelectSupplier(supplier) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      supplierName: supplier.name,
+    }));
   }
 
   function handleSelectExpense(expense) {
@@ -261,6 +290,8 @@ export default function ExpenseManagementPage({ user }) {
     }
   }
 
+  const activeSuppliers = suppliers.filter((supplier) => supplier.isActive);
+
   const monthOptions = useMemo(() => {
     const keys = expenses.map((expense) =>
       getMonthKey(expense.invoiceDate || expense.createdAt)
@@ -357,7 +388,14 @@ export default function ExpenseManagementPage({ user }) {
             </p>
           </div>
 
-          <button className="hero-button" type="button" onClick={fetchExpenses}>
+          <button
+            className="hero-button"
+            type="button"
+            onClick={() => {
+              fetchExpenses();
+              fetchSuppliers();
+            }}
+          >
             Yenile
           </button>
         </div>
@@ -465,7 +503,8 @@ export default function ExpenseManagementPage({ user }) {
 
             <p className="panel-sub">
               Fatura yüklemeden de kira, personel, elektrik, pazarlama veya
-              diğer giderleri manuel ekleyebilirsin.
+              diğer giderleri manuel ekleyebilirsin. Kayıtlı tedarikçi varsa
+              butondan seçebilir, yoksa manuel yazabilirsin.
             </p>
           </div>
 
@@ -490,18 +529,66 @@ export default function ExpenseManagementPage({ user }) {
               <tr>
                 <td>Tedarikçi / Gider Adı</td>
                 <td>
-                  <input
-                    name="supplierName"
-                    value={form.supplierName}
-                    onChange={handleFormChange}
-                    placeholder="Örn: Elektrik faturası, tedarikçi adı, kira"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
+                  <div style={{ display: "grid", gap: 12 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        padding: 12,
+                        borderRadius: 12,
+                        border: "1px solid #cbd5e1",
+                        background: "#f8fafc",
+                      }}
+                    >
+                      {activeSuppliers.length === 0 ? (
+                        <span style={{ color: "#64748b" }}>
+                          Aktif tedarikçi yok. Manuel yazabilirsin.
+                        </span>
+                      ) : (
+                        activeSuppliers.map((supplier) => (
+                          <button
+                            key={supplier.id}
+                            type="button"
+                            onClick={() => handleSelectSupplier(supplier)}
+                            style={{
+                              padding: "10px 14px",
+                              borderRadius: 12,
+                              border: "0",
+                              cursor: "pointer",
+                              fontWeight: 700,
+                              color: "#ffffff",
+                              background:
+                                form.supplierName === supplier.name
+                                  ? "#166534"
+                                  : "#0f172a",
+                            }}
+                          >
+                            {supplier.name}
+                            {supplier.iban ? " · IBAN var" : ""}
+                          </button>
+                        ))
+                      )}
+                    </div>
+
+                    <input
+                      name="supplierName"
+                      value={form.supplierName}
+                      onChange={handleFormChange}
+                      placeholder="Tedarikçiye tıkla ya da manuel gider adı yaz"
+                      style={{
+                        width: "100%",
+                        padding: 12,
+                        borderRadius: 12,
+                        border: "1px solid #cbd5e1",
+                      }}
+                    />
+
+                    <small style={{ color: "#64748b" }}>
+                      Kayıtlı tedarikçi: {suppliers.length} / Aktif:{" "}
+                      {activeSuppliers.length}
+                    </small>
+                  </div>
                 </td>
               </tr>
 
@@ -564,7 +651,9 @@ export default function ExpenseManagementPage({ user }) {
                     </option>
                     <option value="Pazarlama">Pazarlama</option>
                     <option value="Bakım / Onarım">Bakım / Onarım</option>
-                    <option value="Vergi / Resmi Ödeme">Vergi / Resmi Ödeme</option>
+                    <option value="Vergi / Resmi Ödeme">
+                      Vergi / Resmi Ödeme
+                    </option>
                     <option value="Diğer">Diğer</option>
                   </select>
                 </td>
