@@ -24,6 +24,10 @@ model Restaurant {
   uploadedDocuments    UploadedDocument[]
   expenses             Expense[]
   suppliers            Supplier[]
+  purchaseOrders       PurchaseOrder[]
+  inventoryItems       InventoryItem[]
+  stockMovements       StockMovement[]
+  stockCounts          StockCount[]
 }
 
 model User {
@@ -174,4 +178,116 @@ model Supplier {
 
   restaurantId Int
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  purchaseOrders       PurchaseOrder[]
+}
+
+
+model PurchaseOrder {
+  id             Int      @id @default(autoincrement())
+  supplierId     Int?
+  supplier       Supplier? @relation(fields: [supplierId], references: [id])
+  supplierName   String
+  orderNo        String?
+  orderDate      DateTime @default(now())
+  category       String   @default("Stok / Satın Alma")
+  itemName       String
+  quantity       Float    @default(1)
+  unit           String   @default("adet")
+  unitPrice      Float    @default(0)
+  totalAmount    Float    @default(0)
+  paymentStatus  String   @default("UNPAID")
+  status         String   @default("DRAFT")
+  expenseCreated Boolean  @default(false)
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  restaurantId   Int
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id])
+  stockMovementCreated Boolean  @default(false)
+  stockMovements       StockMovement[]
+}
+
+
+model InventoryItem {
+  id           Int      @id @default(autoincrement())
+  name         String
+  category     String   @default("Genel")
+  unit         String   @default("adet")
+  currentStock Float    @default(0)
+  minStock     Float    @default(0)
+  isActive     Boolean  @default(true)
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  stockMovements StockMovement[]
+
+  @@unique([restaurantId, name])
+  stockCountLines     StockCountLine[]
+}
+
+
+model StockMovement {
+  id              Int      @id @default(autoincrement())
+  type            String   @default("PURCHASE_IN")
+  movementDate    DateTime @default(now())
+  quantity        Float    @default(0)
+  unit            String   @default("adet")
+  unitPrice       Float    @default(0)
+  totalAmount     Float    @default(0)
+  source          String   @default("PURCHASE_ORDER")
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  restaurantId    Int
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id])
+
+  inventoryItemId Int
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  purchaseOrderId Int?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+}
+
+
+model StockCount {
+  id           Int      @id @default(autoincrement())
+  countNo      String
+  countDate    DateTime @default(now())
+  status       String   @default("DRAFT")
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  lines StockCountLine[]
+
+  @@unique([restaurantId, countNo])
+}
+
+
+model StockCountLine {
+  id           Int      @id @default(autoincrement())
+  systemStock  Float    @default(0)
+  countedStock Float?
+  difference   Float    @default(0)
+  unit         String   @default("adet")
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stockCountId Int
+  stockCount   StockCount @relation(fields: [stockCountId], references: [id])
+
+  inventoryItemId Int
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@unique([stockCountId, inventoryItemId])
 }

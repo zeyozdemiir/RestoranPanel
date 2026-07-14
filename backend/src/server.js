@@ -1050,6 +1050,617 @@ function formatSupplier(supplier) {
   };
 }
 
+
+function formatPurchaseOrder(order) {
+  return {
+    id: order.id,
+    supplierId: order.supplierId,
+    supplierName: order.supplierName,
+    supplier: order.supplier
+      ? {
+          id: order.supplier.id,
+          name: order.supplier.name,
+          taxNumber: order.supplier.taxNumber,
+          iban: order.supplier.iban,
+          phone: order.supplier.phone,
+          category: order.supplier.category,
+          contactName: order.supplier.contactName,
+        }
+      : null,
+    orderNo: order.orderNo,
+    orderDate: order.orderDate,
+    category: order.category,
+    itemName: order.itemName,
+    quantity: order.quantity,
+    unit: order.unit,
+    unitPrice: order.unitPrice,
+    totalAmount: order.totalAmount,
+    paymentStatus: order.paymentStatus,
+    status: order.status,
+    expenseCreated: order.expenseCreated,
+    stockMovementCreated: order.stockMovementCreated,
+    note: order.note,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+  };
+}
+
+
+function formatInventoryItem(item) {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    unit: item.unit,
+    currentStock: item.currentStock,
+    minStock: item.minStock,
+    isActive: item.isActive,
+    note: item.note,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+  };
+}
+
+function formatStockMovement(movement) {
+  return {
+    id: movement.id,
+    type: movement.type,
+    movementDate: movement.movementDate,
+    quantity: movement.quantity,
+    unit: movement.unit,
+    unitPrice: movement.unitPrice,
+    totalAmount: movement.totalAmount,
+    source: movement.source,
+    note: movement.note,
+    createdAt: movement.createdAt,
+    updatedAt: movement.updatedAt,
+    inventoryItem: movement.inventoryItem
+      ? formatInventoryItem(movement.inventoryItem)
+      : null,
+    purchaseOrder: movement.purchaseOrder
+      ? {
+          id: movement.purchaseOrder.id,
+          supplierName: movement.purchaseOrder.supplierName,
+          itemName: movement.purchaseOrder.itemName,
+          totalAmount: movement.purchaseOrder.totalAmount,
+        }
+      : null,
+  };
+}
+
+app.get("/api/inventory-items", authMiddleware, async (req, res) => {
+  try {
+    const items = await prisma.inventoryItem.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+
+    return res.json({
+      inventoryItems: items.map(formatInventoryItem),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Stok kartları alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/inventory-items", authMiddleware, async (req, res) => {
+  try {
+    const { name, category, unit, currentStock, minStock, note } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({
+        message: "Stok adı zorunludur.",
+      });
+    }
+
+    const item = await prisma.inventoryItem.upsert({
+      where: {
+        restaurantId_name: {
+          restaurantId: req.user.restaurantId,
+          name: String(name).trim(),
+        },
+      },
+      update: {
+        category: category || "Genel",
+        unit: unit || "adet",
+        currentStock: Number(currentStock || 0),
+        minStock: Number(minStock || 0),
+        note: note || null,
+      },
+      create: {
+        restaurantId: req.user.restaurantId,
+        name: String(name).trim(),
+        category: category || "Genel",
+        unit: unit || "adet",
+        currentStock: Number(currentStock || 0),
+        minStock: Number(minStock || 0),
+        note: note || null,
+      },
+    });
+
+    return res.json({
+      message: "Stok kartı kaydedildi.",
+      inventoryItem: formatInventoryItem(item),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Stok kartı kaydedilemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+app.get("/api/stock-movements", authMiddleware, async (req, res) => {
+  try {
+    const movements = await prisma.stockMovement.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        inventoryItem: true,
+        purchaseOrder: true,
+      },
+      orderBy: {
+        movementDate: "desc",
+      },
+    });
+
+    return res.json({
+      stockMovements: movements.map(formatStockMovement),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Stok hareketleri alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/purchase-orders/:id/create-stock-movement", authMiddleware, async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+
+    if (!orderId) {
+      return res.status(400).json({
+        message: "Geçersiz satın alma talebi ID.",
+      });
+    }
+
+    const order = await prisma.purchaseOrder.findFirst({
+      where: {
+        id: orderId,
+        restaurantId: req.user.restaurantId,
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Satın alma talebi bulunamadı.",
+      });
+    }
+
+    if (order.status === "CANCELLED") {
+      return res.status(400).json({
+        message: "İptal edilmiş talep stoğa aktarılamaz.",
+      });
+    }
+
+    if (order.stockMovementCreated) {
+      return res.status(400).json({
+        message: "Bu talep daha önce stoğa aktarılmış.",
+      });
+    }
+
+    const item = await prisma.inventoryItem.upsert({
+      where: {
+        restaurantId_name: {
+          restaurantId: req.user.restaurantId,
+          name: order.itemName,
+        },
+      },
+      update: {
+        category: order.category || "Genel",
+        unit: order.unit || "adet",
+        currentStock: {
+          increment: Number(order.quantity || 0),
+        },
+      },
+      create: {
+        restaurantId: req.user.restaurantId,
+        name: order.itemName,
+        category: order.category || "Genel",
+        unit: order.unit || "adet",
+        currentStock: Number(order.quantity || 0),
+        minStock: 0,
+      },
+    });
+
+    const movement = await prisma.stockMovement.create({
+      data: {
+        restaurantId: req.user.restaurantId,
+        inventoryItemId: item.id,
+        purchaseOrderId: order.id,
+        type: "PURCHASE_IN",
+        movementDate: order.orderDate || new Date(),
+        quantity: Number(order.quantity || 0),
+        unit: order.unit || "adet",
+        unitPrice: Number(order.unitPrice || 0),
+        totalAmount: Number(order.totalAmount || 0),
+        source: "PURCHASE_ORDER",
+        note:
+          order.supplierName +
+          " satın alma talebinden stok girişi oluşturuldu.",
+      },
+      include: {
+        inventoryItem: true,
+        purchaseOrder: true,
+      },
+    });
+
+    const updatedOrder = await prisma.purchaseOrder.update({
+      where: {
+        id: order.id,
+      },
+      data: {
+        stockMovementCreated: true,
+        status: "APPROVED",
+      },
+      include: {
+        supplier: true,
+      },
+    });
+
+    return res.json({
+      message: "Satın alma talebi stoğa aktarıldı.",
+      stockMovement: formatStockMovement(movement),
+      inventoryItem: formatInventoryItem(item),
+      purchaseOrder: formatPurchaseOrder(updatedOrder),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Satın alma talebi stoğa aktarılamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.get("/api/purchase-orders", authMiddleware, async (req, res) => {
+  try {
+    const orders = await prisma.purchaseOrder.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        supplier: true,
+      },
+      orderBy: {
+        orderDate: "desc",
+      },
+    });
+
+    return res.json({
+      purchaseOrders: orders.map(formatPurchaseOrder),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Satın alma talepleri alınamadı.",
+    });
+  }
+});
+
+app.post("/api/purchase-orders", authMiddleware, async (req, res) => {
+  try {
+    const {
+      supplierId,
+      supplierName,
+      orderNo,
+      orderDate,
+      category,
+      itemName,
+      quantity,
+      unit,
+      unitPrice,
+      totalAmount,
+      paymentStatus,
+      status,
+      note,
+    } = req.body;
+
+    if (!supplierName || !String(supplierName).trim()) {
+      return res.status(400).json({
+        message: "Tedarikçi adı zorunludur.",
+      });
+    }
+
+    if (!itemName || !String(itemName).trim()) {
+      return res.status(400).json({
+        message: "Ürün / kalem adı zorunludur.",
+      });
+    }
+
+    const quantityNumber = Number(quantity || 1);
+    const unitPriceNumber = Number(unitPrice || 0);
+    const calculatedTotal =
+      totalAmount !== undefined && totalAmount !== ""
+        ? Number(totalAmount || 0)
+        : quantityNumber * unitPriceNumber;
+
+    let safeSupplierId = supplierId ? Number(supplierId) : null;
+
+    if (safeSupplierId) {
+      const supplier = await prisma.supplier.findFirst({
+        where: {
+          id: safeSupplierId,
+          restaurantId: req.user.restaurantId,
+        },
+      });
+
+      if (!supplier) {
+        safeSupplierId = null;
+      }
+    }
+
+    const order = await prisma.purchaseOrder.create({
+      data: {
+        restaurantId: req.user.restaurantId,
+        supplierId: safeSupplierId,
+        supplierName: String(supplierName).trim(),
+        orderNo: orderNo || null,
+        orderDate: orderDate ? new Date(orderDate) : new Date(),
+        category: category || "Stok / Satın Alma",
+        itemName: String(itemName).trim(),
+        quantity: quantityNumber,
+        unit: unit || "adet",
+        unitPrice: unitPriceNumber,
+        totalAmount: calculatedTotal,
+        paymentStatus: paymentStatus || "UNPAID",
+        status: status || "DRAFT",
+        note: note || null,
+      },
+      include: {
+        supplier: true,
+      },
+    });
+
+    return res.json({
+      message: "Satın alma talebi oluşturuldu.",
+      purchaseOrder: formatPurchaseOrder(order),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Satın alma talebi oluşturulamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.put("/api/purchase-orders/:id", authMiddleware, async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+
+    if (!orderId) {
+      return res.status(400).json({
+        message: "Geçersiz satın alma ID.",
+      });
+    }
+
+    const existingOrder = await prisma.purchaseOrder.findFirst({
+      where: {
+        id: orderId,
+        restaurantId: req.user.restaurantId,
+      },
+    });
+
+    if (!existingOrder) {
+      return res.status(404).json({
+        message: "Satın alma talebi bulunamadı.",
+      });
+    }
+
+    const {
+      supplierId,
+      supplierName,
+      orderNo,
+      orderDate,
+      category,
+      itemName,
+      quantity,
+      unit,
+      unitPrice,
+      totalAmount,
+      paymentStatus,
+      status,
+      note,
+      expenseCreated,
+    } = req.body;
+
+    const quantityNumber =
+      quantity !== undefined && quantity !== ""
+        ? Number(quantity || 0)
+        : existingOrder.quantity;
+
+    const unitPriceNumber =
+      unitPrice !== undefined && unitPrice !== ""
+        ? Number(unitPrice || 0)
+        : existingOrder.unitPrice;
+
+    const calculatedTotal =
+      totalAmount !== undefined && totalAmount !== ""
+        ? Number(totalAmount || 0)
+        : quantityNumber * unitPriceNumber;
+
+    let safeSupplierId =
+      supplierId !== undefined && supplierId !== ""
+        ? Number(supplierId)
+        : existingOrder.supplierId;
+
+    if (safeSupplierId) {
+      const supplier = await prisma.supplier.findFirst({
+        where: {
+          id: safeSupplierId,
+          restaurantId: req.user.restaurantId,
+        },
+      });
+
+      if (!supplier) {
+        safeSupplierId = existingOrder.supplierId;
+      }
+    }
+
+    const updatedOrder = await prisma.purchaseOrder.update({
+      where: {
+        id: orderId,
+      },
+      data: {
+        supplierId: safeSupplierId || null,
+        supplierName: supplierName ?? existingOrder.supplierName,
+        orderNo: orderNo === "" ? null : orderNo ?? existingOrder.orderNo,
+        orderDate: orderDate ? new Date(orderDate) : existingOrder.orderDate,
+        category: category ?? existingOrder.category,
+        itemName: itemName ?? existingOrder.itemName,
+        quantity: quantityNumber,
+        unit: unit ?? existingOrder.unit,
+        unitPrice: unitPriceNumber,
+        totalAmount: calculatedTotal,
+        paymentStatus: paymentStatus ?? existingOrder.paymentStatus,
+        status: status ?? existingOrder.status,
+        note: note === "" ? null : note ?? existingOrder.note,
+        expenseCreated:
+          typeof expenseCreated === "boolean"
+            ? expenseCreated
+            : existingOrder.expenseCreated,
+      },
+      include: {
+        supplier: true,
+      },
+    });
+
+    return res.json({
+      message: "Satın alma talebi güncellendi.",
+      purchaseOrder: formatPurchaseOrder(updatedOrder),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Satın alma talebi güncellenemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/purchase-orders/:id/create-expense", authMiddleware, async (req, res) => {
+  try {
+    const orderId = Number(req.params.id);
+
+    if (!orderId) {
+      return res.status(400).json({
+        message: "Geçersiz satın alma ID.",
+      });
+    }
+
+    const order = await prisma.purchaseOrder.findFirst({
+      where: {
+        id: orderId,
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        supplier: true,
+      },
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        message: "Satın alma talebi bulunamadı.",
+      });
+    }
+
+    if (order.expenseCreated) {
+      return res.status(400).json({
+        message: "Bu satın alma kaydı daha önce giderlere aktarılmış.",
+      });
+    }
+
+    if (order.status === "CANCELLED") {
+      return res.status(400).json({
+        message: "İptal edilmiş satın alma giderlere aktarılamaz.",
+      });
+    }
+
+    const expense = await prisma.expense.create({
+      data: {
+        restaurantId: req.user.restaurantId,
+        supplierName: order.supplierName,
+        invoiceNo: order.orderNo || null,
+        invoiceDate: order.orderDate,
+        category: order.category || "Stok / Satın Alma",
+        description:
+          order.itemName +
+          " - " +
+          order.quantity +
+          " " +
+          order.unit +
+          " x " +
+          order.unitPrice,
+        netAmount: order.totalAmount,
+        taxAmount: 0,
+        totalAmount: order.totalAmount,
+        currency: "TRY",
+        paymentStatus: order.paymentStatus,
+        status: "APPROVED",
+        source: "PURCHASE_ORDER",
+        note: order.note
+          ? order.note + "\nSatın alma kaydından gider oluşturuldu."
+          : "Satın alma kaydından gider oluşturuldu.",
+      },
+    });
+
+    const updatedOrder = await prisma.purchaseOrder.update({
+      where: {
+        id: order.id,
+      },
+      data: {
+        expenseCreated: true,
+        status: "APPROVED",
+      },
+      include: {
+        supplier: true,
+      },
+    });
+
+    return res.json({
+      message: "Satın alma kaydı giderlere aktarıldı.",
+      purchaseOrder: formatPurchaseOrder(updatedOrder),
+      expense,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Satın alma giderlere aktarılamadı.",
+    });
+  }
+});
+
 app.get("/api/suppliers", authMiddleware, async (req, res) => {
   try {
     const suppliers = await prisma.supplier.findMany({
@@ -1220,6 +1831,344 @@ app.get("/api/restaurants", authMiddleware, async (req, res) => {
     });
   }
 });
+
+
+
+function formatStockCountItem(item) {
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    unit: item.unit,
+    currentStock: item.currentStock,
+    minStock: item.minStock,
+    isActive: item.isActive,
+  };
+}
+
+function formatStockCountLine(line) {
+  return {
+    id: line.id,
+    systemStock: line.systemStock,
+    countedStock: line.countedStock,
+    difference: line.difference,
+    unit: line.unit,
+    note: line.note,
+    createdAt: line.createdAt,
+    updatedAt: line.updatedAt,
+    inventoryItem: line.inventoryItem
+      ? formatStockCountItem(line.inventoryItem)
+      : null,
+  };
+}
+
+function formatStockCount(count) {
+  return {
+    id: count.id,
+    countNo: count.countNo,
+    countDate: count.countDate,
+    status: count.status,
+    note: count.note,
+    createdAt: count.createdAt,
+    updatedAt: count.updatedAt,
+    lines: count.lines ? count.lines.map(formatStockCountLine) : [],
+  };
+}
+
+app.get("/api/stock-counts", authMiddleware, async (req, res) => {
+  try {
+    const counts = await prisma.stockCount.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        lines: {
+          include: {
+            inventoryItem: true,
+          },
+          orderBy: {
+            id: "asc",
+          },
+        },
+      },
+      orderBy: {
+        countDate: "desc",
+      },
+    });
+
+    return res.json({
+      stockCounts: counts.map(formatStockCount),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Stok sayımları alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/stock-counts", authMiddleware, async (req, res) => {
+  try {
+    const { countNo, countDate, note } = req.body;
+
+    const inventoryItems = await prisma.inventoryItem.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+        isActive: true,
+      },
+      orderBy: {
+        name: "asc",
+      },
+    });
+
+    const generatedCountNo =
+      countNo ||
+      "SAYIM-" +
+        new Date()
+          .toISOString()
+          .slice(0, 16)
+          .replace(/[-:T]/g, "");
+
+    const stockCount = await prisma.stockCount.create({
+      data: {
+        restaurantId: req.user.restaurantId,
+        countNo: generatedCountNo,
+        countDate: countDate ? new Date(countDate) : new Date(),
+        status: "DRAFT",
+        note: note || null,
+        lines: {
+          create: inventoryItems.map((item) => ({
+            inventoryItemId: item.id,
+            systemStock: Number(item.currentStock || 0),
+            countedStock: null,
+            difference: 0,
+            unit: item.unit || "adet",
+            note: null,
+          })),
+        },
+      },
+      include: {
+        lines: {
+          include: {
+            inventoryItem: true,
+          },
+          orderBy: {
+            id: "asc",
+          },
+        },
+      },
+    });
+
+    return res.json({
+      message: "Stok sayımı oluşturuldu.",
+      stockCount: formatStockCount(stockCount),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Stok sayımı oluşturulamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.put("/api/stock-counts/:id/lines/:lineId", authMiddleware, async (req, res) => {
+  try {
+    const countId = Number(req.params.id);
+    const lineId = Number(req.params.lineId);
+    const { countedStock, note } = req.body;
+
+    const stockCount = await prisma.stockCount.findFirst({
+      where: {
+        id: countId,
+        restaurantId: req.user.restaurantId,
+      },
+    });
+
+    if (!stockCount) {
+      return res.status(404).json({
+        message: "Stok sayımı bulunamadı.",
+      });
+    }
+
+    if (stockCount.status === "COMPLETED") {
+      return res.status(400).json({
+        message: "Tamamlanmış stok sayımı düzenlenemez.",
+      });
+    }
+
+    const line = await prisma.stockCountLine.findFirst({
+      where: {
+        id: lineId,
+        stockCountId: countId,
+      },
+      include: {
+        inventoryItem: true,
+      },
+    });
+
+    if (!line) {
+      return res.status(404).json({
+        message: "Stok sayım satırı bulunamadı.",
+      });
+    }
+
+    const numericCountedStock =
+      countedStock === "" || countedStock === null || countedStock === undefined
+        ? null
+        : Number(countedStock);
+
+    const difference =
+      numericCountedStock === null
+        ? 0
+        : numericCountedStock - Number(line.systemStock || 0);
+
+    const updatedLine = await prisma.stockCountLine.update({
+      where: {
+        id: line.id,
+      },
+      data: {
+        countedStock: numericCountedStock,
+        difference,
+        note: note || null,
+      },
+      include: {
+        inventoryItem: true,
+      },
+    });
+
+    return res.json({
+      message: "Stok sayım satırı güncellendi.",
+      line: formatStockCountLine(updatedLine),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Stok sayım satırı güncellenemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/stock-counts/:id/complete", authMiddleware, async (req, res) => {
+  try {
+    const countId = Number(req.params.id);
+
+    const stockCount = await prisma.stockCount.findFirst({
+      where: {
+        id: countId,
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        lines: {
+          include: {
+            inventoryItem: true,
+          },
+        },
+      },
+    });
+
+    if (!stockCount) {
+      return res.status(404).json({
+        message: "Stok sayımı bulunamadı.",
+      });
+    }
+
+    if (stockCount.status === "COMPLETED") {
+      return res.status(400).json({
+        message: "Bu stok sayımı zaten tamamlanmış.",
+      });
+    }
+
+    const completedCount = await prisma.$transaction(async (tx) => {
+      for (const line of stockCount.lines) {
+        const counted =
+          line.countedStock === null || line.countedStock === undefined
+            ? Number(line.systemStock || 0)
+            : Number(line.countedStock || 0);
+
+        const difference = counted - Number(line.systemStock || 0);
+
+        await tx.stockCountLine.update({
+          where: {
+            id: line.id,
+          },
+          data: {
+            countedStock: counted,
+            difference,
+          },
+        });
+
+        if (difference !== 0) {
+          await tx.stockMovement.create({
+            data: {
+              restaurantId: req.user.restaurantId,
+              inventoryItemId: line.inventoryItemId,
+              type: "COUNT_ADJUSTMENT",
+              movementDate: new Date(),
+              quantity: difference,
+              unit: line.unit || line.inventoryItem.unit || "adet",
+              unitPrice: 0,
+              totalAmount: 0,
+              source: "STOCK_COUNT",
+              note:
+                stockCount.countNo +
+                " stok sayımı fark düzeltmesi. Sistem: " +
+                line.systemStock +
+                ", Sayım: " +
+                counted,
+            },
+          });
+        }
+
+        await tx.inventoryItem.update({
+          where: {
+            id: line.inventoryItemId,
+          },
+          data: {
+            currentStock: counted,
+          },
+        });
+      }
+
+      return tx.stockCount.update({
+        where: {
+          id: stockCount.id,
+        },
+        data: {
+          status: "COMPLETED",
+        },
+        include: {
+          lines: {
+            include: {
+              inventoryItem: true,
+            },
+            orderBy: {
+              id: "asc",
+            },
+          },
+        },
+      });
+    });
+
+    return res.json({
+      message: "Stok sayımı tamamlandı ve stoklar güncellendi.",
+      stockCount: formatStockCount(completedCount),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Stok sayımı tamamlanamadı.",
+      detail: error.message,
+    });
+  }
+});
+
 
 app.listen(PORT, () => {
   console.log(`HandsOff backend calisiyor: http://localhost:${PORT}`);

@@ -5,6 +5,14 @@ function formatDate(value) {
   return new Date(value).toLocaleDateString("tr-TR");
 }
 
+function formatMoney(value) {
+  return new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "TRY",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
 const emptyForm = {
   name: "",
   taxNumber: "",
@@ -19,6 +27,7 @@ const emptyForm = {
 
 export default function SuppliersPage({ user }) {
   const [suppliers, setSuppliers] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
@@ -28,7 +37,51 @@ export default function SuppliersPage({ user }) {
 
   useEffect(() => {
     fetchSuppliers();
+    fetchExpenses();
+    restoreSupplierDraft();
   }, []);
+
+  useEffect(() => {
+    const hasDraftData =
+      form.name ||
+      form.taxNumber ||
+      form.iban ||
+      form.phone ||
+      form.email ||
+      form.address ||
+      form.contactName ||
+      form.note;
+
+    if (!selectedSupplier && hasDraftData) {
+      localStorage.setItem("handsoff_supplier_form_draft", JSON.stringify(form));
+    }
+  }, [form, selectedSupplier]);
+
+  function restoreSupplierDraft() {
+    try {
+      const rawDraft = localStorage.getItem("handsoff_supplier_form_draft");
+
+      if (!rawDraft) {
+        return;
+      }
+
+      const draft = JSON.parse(rawDraft);
+
+      if (!draft || typeof draft !== "object") {
+        localStorage.removeItem("handsoff_supplier_form_draft");
+        return;
+      }
+
+      setForm({
+        ...emptyForm,
+        ...draft,
+      });
+
+      setMessage("Kaydedilmemiş tedarikçi taslağın geri yüklendi.");
+    } catch {
+      localStorage.removeItem("handsoff_supplier_form_draft");
+    }
+  }
 
   async function fetchSuppliers() {
     try {
@@ -58,6 +111,26 @@ export default function SuppliersPage({ user }) {
     }
   }
 
+  async function fetchExpenses() {
+    try {
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch("http://localhost:4000/api/expenses", {
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setExpenses(data.expenses || []);
+      }
+    } catch {
+      setExpenses([]);
+    }
+  }
+
   function handleChange(event) {
     const { name, value } = event.target;
 
@@ -68,6 +141,7 @@ export default function SuppliersPage({ user }) {
   }
 
   function handleNewSupplier() {
+    localStorage.removeItem("handsoff_supplier_form_draft");
     setSelectedSupplier(null);
     setForm(emptyForm);
     setMessage("");
@@ -129,6 +203,8 @@ export default function SuppliersPage({ user }) {
         return;
       }
 
+      localStorage.removeItem("handsoff_supplier_form_draft");
+
       setMessage(
         selectedSupplier
           ? "Tedarikçi kaydı güncellendi."
@@ -142,6 +218,29 @@ export default function SuppliersPage({ user }) {
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleCreateExpenseForSupplier(supplier) {
+    localStorage.setItem(
+      "handsoff_pending_expense_supplier",
+      JSON.stringify({
+        id: supplier.id,
+        name: supplier.name,
+        category: supplier.category,
+        iban: supplier.iban,
+        taxNumber: supplier.taxNumber,
+        contactName: supplier.contactName,
+        phone: supplier.phone,
+      })
+    );
+
+    setMessage(supplier.name + " için gider kaydı hazırlanıyor.");
+
+    window.dispatchEvent(
+      new CustomEvent("handsoff:navigate", {
+        detail: "Gider Yönetimi",
+      })
+    );
   }
 
   async function handleToggleSupplier(supplier) {
@@ -191,6 +290,68 @@ export default function SuppliersPage({ user }) {
   const passiveCount = suppliers.filter((supplier) => !supplier.isActive).length;
   const ibanCount = suppliers.filter((supplier) => supplier.iban).length;
 
+  const activeExpenses = expenses.filter(
+    (expense) => expense.status !== "CANCELLED"
+  );
+
+  const supplierFinancialSummary = useMemo(() => {
+    const summaryMap = new Map();
+
+    activeExpenses.forEach((expense) => {
+      const supplierName = expense.supplierName || "Bilinmeyen";
+      const current = summaryMap.get(supplierName) || {
+        supplierName,
+        totalAmount: 0,
+        unpaidAmount: 0,
+        paidAmount: 0,
+        partialAmount: 0,
+        count: 0,
+      };
+
+      const totalAmount = Number(expense.totalAmount || 0);
+
+      current.totalAmount += totalAmount;
+      current.count += 1;
+
+      if (expense.paymentStatus === "UNPAID") {
+        current.unpaidAmount += totalAmount;
+      }
+
+      if (expense.paymentStatus === "PAID") {
+        current.paidAmount += totalAmount;
+      }
+
+      if (expense.paymentStatus === "PARTIAL") {
+        current.partialAmount += totalAmount;
+      }
+
+      summaryMap.set(supplierName, current);
+    });
+
+    return summaryMap;
+  }, [activeExpenses]);
+
+  function getSupplierFinance(supplierName) {
+    return (
+      supplierFinancialSummary.get(supplierName) || {
+        supplierName,
+        totalAmount: 0,
+        unpaidAmount: 0,
+        paidAmount: 0,
+        partialAmount: 0,
+        count: 0,
+      }
+    );
+  }
+
+  const totalSupplierDebt = suppliers.reduce((total, supplier) => {
+    return total + getSupplierFinance(supplier.name).unpaidAmount;
+  }, 0);
+
+  const totalSupplierExpense = suppliers.reduce((total, supplier) => {
+    return total + getSupplierFinance(supplier.name).totalAmount;
+  }, 0);
+
   const categorySummary = useMemo(() => {
     const summaryMap = new Map();
 
@@ -199,14 +360,21 @@ export default function SuppliersPage({ user }) {
       const current = summaryMap.get(category) || {
         category,
         count: 0,
+        totalAmount: 0,
+        unpaidAmount: 0,
       };
 
+      const finance = getSupplierFinance(supplier.name);
+
       current.count += 1;
+      current.totalAmount += finance.totalAmount;
+      current.unpaidAmount += finance.unpaidAmount;
+
       summaryMap.set(category, current);
     });
 
     return Array.from(summaryMap.values()).sort((a, b) => b.count - a.count);
-  }, [suppliers]);
+  }, [suppliers, supplierFinancialSummary]);
 
   return (
     <div className="page">
@@ -217,12 +385,19 @@ export default function SuppliersPage({ user }) {
             <h1>Tedarikçiler</h1>
             <p>
               Restoranın çalıştığı tedarikçileri, vergi bilgilerini, IBAN
-              bilgilerini, iletişim kişilerini ve kategorilerini buradan
+              bilgilerini, iletişim kişilerini ve gider/borç durumlarını buradan
               yönetebilirsin.
             </p>
           </div>
 
-          <button className="hero-button" type="button" onClick={fetchSuppliers}>
+          <button
+            className="hero-button"
+            type="button"
+            onClick={() => {
+              fetchSuppliers();
+              fetchExpenses();
+            }}
+          >
             Yenile
           </button>
         </div>
@@ -253,25 +428,25 @@ export default function SuppliersPage({ user }) {
         <div className="stat-card">
           <p>Toplam Tedarikçi</p>
           <h3>{suppliers.length}</h3>
-          <span>Kayıtlı firma / kişi</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Aktif Tedarikçi</p>
-          <h3>{activeCount}</h3>
-          <span>Kullanımda olanlar</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Pasif Tedarikçi</p>
-          <h3>{passiveCount}</h3>
-          <span>Geçici olarak kullanılmayanlar</span>
+          <span>{activeCount} aktif / {passiveCount} pasif</span>
         </div>
 
         <div className="stat-card">
           <p>IBAN Kayıtlı</p>
           <h3>{ibanCount}</h3>
           <span>Ödeme bilgisi girilenler</span>
+        </div>
+
+        <div className="stat-card">
+          <p>Toplam Gider</p>
+          <h3>{formatMoney(totalSupplierExpense)}</h3>
+          <span>Tedarikçilere bağlı kayıtlar</span>
+        </div>
+
+        <div className="stat-card">
+          <p>Ödenmemiş Borç</p>
+          <h3>{formatMoney(totalSupplierDebt)}</h3>
+          <span>Tedarikçi bazlı açık borç</span>
         </div>
       </div>
 
@@ -280,7 +455,7 @@ export default function SuppliersPage({ user }) {
           <div>
             <h2>Kategori Özeti</h2>
             <p className="panel-sub">
-              Tedarikçilerin kategori bazlı dağılımı.
+              Tedarikçilerin kategori bazlı dağılımı ve gider/borç özeti.
             </p>
           </div>
 
@@ -292,19 +467,23 @@ export default function SuppliersPage({ user }) {
             <tr>
               <th>Kategori</th>
               <th>Tedarikçi Sayısı</th>
+              <th>Toplam Gider</th>
+              <th>Ödenmemiş Borç</th>
             </tr>
           </thead>
 
           <tbody>
             {categorySummary.length === 0 ? (
               <tr>
-                <td colSpan="2">Henüz kategori kaydı yok.</td>
+                <td colSpan="4">Henüz kategori kaydı yok.</td>
               </tr>
             ) : (
               categorySummary.map((item) => (
                 <tr key={item.category}>
                   <td>{item.category}</td>
                   <td>{item.count}</td>
+                  <td>{formatMoney(item.totalAmount)}</td>
+                  <td>{formatMoney(item.unpaidAmount)}</td>
                 </tr>
               ))
             )}
@@ -322,7 +501,7 @@ export default function SuppliersPage({ user }) {
             </h2>
             <p className="panel-sub">
               Bu bilgiler fatura, satın alma, gider ve ödeme ekranlarıyla
-              bağlanacak.
+              birlikte kullanılacak.
             </p>
           </div>
 
@@ -541,7 +720,8 @@ export default function SuppliersPage({ user }) {
           <div>
             <h2>Tedarikçi Listesi</h2>
             <p className="panel-sub">
-              Kayıtlı tedarikçileri düzenleyebilir veya pasife alabilirsin.
+              Kayıtlı tedarikçileri, ödeme bilgilerini ve gider/borç durumunu
+              buradan takip edebilirsin.
             </p>
           </div>
 
@@ -559,58 +739,87 @@ export default function SuppliersPage({ user }) {
               <th>IBAN</th>
               <th>Yetkili</th>
               <th>Telefon</th>
-              <th>Kayıt Tarihi</th>
+              <th>Toplam Gider</th>
+              <th>Ödenmiş</th>
+              <th>Ödenmemiş</th>
+              <th>Kayıt</th>
             </tr>
           </thead>
 
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="9">Tedarikçiler yükleniyor...</td>
+                <td colSpan="12">Tedarikçiler yükleniyor...</td>
               </tr>
             ) : suppliers.length === 0 ? (
               <tr>
-                <td colSpan="9">Henüz tedarikçi kaydı yok.</td>
+                <td colSpan="12">Henüz tedarikçi kaydı yok.</td>
               </tr>
             ) : (
-              suppliers.map((supplier) => (
-                <tr key={supplier.id}>
-                  <td>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        className="hero-button"
-                        onClick={() => handleSelectSupplier(supplier)}
-                        style={{ padding: "8px 12px", borderRadius: 12 }}
-                      >
-                        Düzenle
-                      </button>
+              suppliers.map((supplier) => {
+                const finance = getSupplierFinance(supplier.name);
 
-                      <button
-                        type="button"
-                        className="hero-button"
-                        onClick={() => handleToggleSupplier(supplier)}
-                        style={{
-                          padding: "8px 12px",
-                          borderRadius: 12,
-                          background: supplier.isActive ? "#991b1b" : "#166534",
-                        }}
+                return (
+                  <tr key={supplier.id}>
+                    <td>
+                      <div
+                        style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
                       >
-                        {supplier.isActive ? "Pasife Al" : "Aktife Al"}
-                      </button>
-                    </div>
-                  </td>
+                        <button
+                          type="button"
+                          className="hero-button"
+                          onClick={() => handleSelectSupplier(supplier)}
+                          style={{ padding: "8px 12px", borderRadius: 12 }}
+                        >
+                          Düzenle
+                        </button>
 
-                  <td>{supplier.isActive ? "Aktif" : "Pasif"}</td>
-                  <td>{supplier.name}</td>
-                  <td>{supplier.category}</td>
-                  <td>{supplier.taxNumber || "-"}</td>
-                  <td>{supplier.iban || "-"}</td>
-                  <td>{supplier.contactName || "-"}</td>
-                  <td>{supplier.phone || "-"}</td>
-                  <td>{formatDate(supplier.createdAt)}</td>
-                </tr>
-              ))
+                        <button
+                          type="button"
+                          className="hero-button"
+                          onClick={() => handleCreateExpenseForSupplier(supplier)}
+                          style={{
+                            padding: "8px 12px",
+                            borderRadius: 12,
+                            background: "#1d4ed8",
+                          }}
+                        >
+                          Bu Tedarikçiye Gider Ekle
+                        </button>
+
+                        <button
+                          type="button"
+                          className="hero-button"
+                          onClick={() => handleToggleSupplier(supplier)}
+                          style={{
+                            padding: "8px 12px",
+                            borderRadius: 12,
+                            background: supplier.isActive
+                              ? "#991b1b"
+                              : "#166534",
+                          }}
+                        >
+                          {supplier.isActive ? "Pasife Al" : "Aktife Al"}
+                        </button>
+                      </div>
+                    </td>
+
+                    <td>{supplier.isActive ? "Aktif" : "Pasif"}</td>
+                    <td>{supplier.name}</td>
+                    <td>{supplier.category}</td>
+                    <td>{supplier.taxNumber || "-"}</td>
+                    <td>{supplier.iban || "-"}</td>
+                    <td>{supplier.contactName || "-"}</td>
+                    <td>{supplier.phone || "-"}</td>
+                    <td>{formatMoney(finance.totalAmount)}</td>
+                    <td>{formatMoney(finance.paidAmount)}</td>
+                    <td>{formatMoney(finance.unpaidAmount)}</td>
+                    <td>
+                      {finance.count} gider / {formatDate(supplier.createdAt)}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

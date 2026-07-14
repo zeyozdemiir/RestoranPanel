@@ -10,52 +10,17 @@ function formatMoney(value) {
 
 function formatDate(value) {
   if (!value) return "-";
-
   return new Date(value).toLocaleDateString("tr-TR");
 }
 
 function getDateInputValue(value) {
   if (!value) return "";
-
   return new Date(value).toISOString().slice(0, 10);
 }
 
-function getMonthKey(value) {
-  const date = value ? new Date(value) : new Date();
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-
-  return `${year}-${month}`;
-}
-
-function getMonthLabel(monthKey) {
-  const [year, month] = monthKey.split("-");
-
-  const date = new Date(Number(year), Number(month) - 1, 1);
-
-  return date.toLocaleDateString("tr-TR", {
-    month: "long",
-    year: "numeric",
-  });
-}
-
-const statusLabels = {
-  WAITING_AI: "AI okuma bekliyor",
-  DRAFT: "Taslak",
-  APPROVED: "Onaylandı",
-  CANCELLED: "İptal",
-};
-
-const paymentStatusLabels = {
-  UNPAID: "Ödenmedi",
-  PAID: "Ödendi",
-  PARTIAL: "Kısmi Ödendi",
-};
-
-function getExpenseCategoryFromSupplier(supplierCategory) {
+function getPurchaseCategoryFromSupplier(supplierCategory) {
   const categoryMap = {
-    Genel: "Gider Faturası",
+    Genel: "Stok / Satın Alma",
     "Et / Tavuk": "Et / Tavuk",
     Balık: "Balık",
     "Sebze / Meyve": "Sebze / Meyve",
@@ -68,28 +33,41 @@ function getExpenseCategoryFromSupplier(supplierCategory) {
     Diğer: "Diğer",
   };
 
-  return categoryMap[supplierCategory] || "Gider Faturası";
+  return categoryMap[supplierCategory] || "Stok / Satın Alma";
 }
 
 const emptyForm = {
+  supplierId: "",
   supplierName: "",
-  invoiceNo: "",
-  invoiceDate: "",
-  category: "Gider Faturası",
-  description: "",
-  netAmount: "",
-  taxAmount: "",
+  orderNo: "",
+  orderDate: "",
+  category: "Stok / Satın Alma",
+  itemName: "",
+  quantity: "1",
+  unit: "adet",
+  unitPrice: "",
   totalAmount: "",
   paymentStatus: "UNPAID",
-  status: "APPROVED",
+  status: "DRAFT",
   note: "",
 };
 
-export default function ExpenseManagementPage({ user }) {
-  const [expenses, setExpenses] = useState([]);
+const paymentStatusLabels = {
+  UNPAID: "Ödenmedi",
+  PAID: "Ödendi",
+  PARTIAL: "Kısmi Ödendi",
+};
+
+const statusLabels = {
+  DRAFT: "Taslak",
+  APPROVED: "Onaylandı",
+  CANCELLED: "İptal",
+};
+
+export default function PurchaseOrdersPage({ user }) {
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  const [selectedMonth, setSelectedMonth] = useState(getMonthKey(new Date()));
-  const [selectedExpense, setSelectedExpense] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -97,76 +75,33 @@ export default function ExpenseManagementPage({ user }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchExpenses();
+    fetchPurchaseOrders();
     fetchSuppliers();
-    restoreExpenseDraft();
-    readPendingExpenseSupplier();
+    restoreDraft();
   }, []);
 
   useEffect(() => {
-    const hasPendingSupplier = localStorage.getItem(
-      "handsoff_pending_expense_supplier"
-    );
-
     const hasDraftData =
       form.supplierName ||
-      form.invoiceNo ||
-      form.invoiceDate ||
-      form.description ||
-      form.netAmount ||
-      form.taxAmount ||
+      form.orderNo ||
+      form.orderDate ||
+      form.itemName ||
+      form.quantity !== "1" ||
+      form.unitPrice ||
       form.totalAmount ||
       form.note;
 
-    if (!selectedExpense && !hasPendingSupplier && hasDraftData) {
-      localStorage.setItem("handsoff_expense_form_draft", JSON.stringify(form));
+    if (!selectedOrder && hasDraftData) {
+      localStorage.setItem(
+        "handsoff_purchase_order_draft",
+        JSON.stringify(form)
+      );
     }
-  }, [form, selectedExpense]);
+  }, [form, selectedOrder]);
 
-  function readPendingExpenseSupplier() {
+  function restoreDraft() {
     try {
-      const rawSupplier = localStorage.getItem(
-        "handsoff_pending_expense_supplier"
-      );
-
-      if (!rawSupplier) {
-        return;
-      }
-
-      const pendingSupplier = JSON.parse(rawSupplier);
-
-      if (!pendingSupplier || !pendingSupplier.name) {
-        localStorage.removeItem("handsoff_pending_expense_supplier");
-        return;
-      }
-
-      setForm((currentForm) => ({
-        ...currentForm,
-        supplierName: pendingSupplier.name,
-        category: getExpenseCategoryFromSupplier(pendingSupplier.category),
-      }));
-
-      setMessage(
-        pendingSupplier.name + " için gider kaydı hazırlığı açıldı."
-      );
-
-      localStorage.removeItem("handsoff_pending_expense_supplier");
-    } catch {
-      localStorage.removeItem("handsoff_pending_expense_supplier");
-    }
-  }
-
-  function restoreExpenseDraft() {
-    try {
-      const hasPendingSupplier = localStorage.getItem(
-        "handsoff_pending_expense_supplier"
-      );
-
-      if (hasPendingSupplier) {
-        return;
-      }
-
-      const rawDraft = localStorage.getItem("handsoff_expense_form_draft");
+      const rawDraft = localStorage.getItem("handsoff_purchase_order_draft");
 
       if (!rawDraft) {
         return;
@@ -175,7 +110,7 @@ export default function ExpenseManagementPage({ user }) {
       const draft = JSON.parse(rawDraft);
 
       if (!draft || typeof draft !== "object") {
-        localStorage.removeItem("handsoff_expense_form_draft");
+        localStorage.removeItem("handsoff_purchase_order_draft");
         return;
       }
 
@@ -184,9 +119,37 @@ export default function ExpenseManagementPage({ user }) {
         ...draft,
       });
 
-      setMessage("Kaydedilmemiş gider taslağın geri yüklendi.");
+      setMessage("Kaydedilmemiş satın alma talebi taslağın geri yüklendi.");
     } catch {
-      localStorage.removeItem("handsoff_expense_form_draft");
+      localStorage.removeItem("handsoff_purchase_order_draft");
+    }
+  }
+
+  async function fetchPurchaseOrders() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch("http://localhost:4000/api/purchase-orders", {
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Satın alma talepleri alınamadı.");
+        return;
+      }
+
+      setPurchaseOrders(data.purchaseOrders || []);
+    } catch {
+      setError("Backend bağlantısı kurulamadı.");
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -210,73 +173,6 @@ export default function ExpenseManagementPage({ user }) {
     }
   }
 
-  async function fetchExpenses() {
-    try {
-      setLoading(true);
-      setError("");
-
-      const token = localStorage.getItem("handsoff_token");
-
-      const response = await fetch("http://localhost:4000/api/expenses", {
-        headers: {
-          Authorization: "Bearer " + token,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || "Gider kayıtları alınamadı.");
-        return;
-      }
-
-      setExpenses(data.expenses || []);
-    } catch {
-      setError("Backend bağlantısı kurulamadı.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function handleNewExpense() {
-    localStorage.removeItem("handsoff_expense_form_draft");
-    setSelectedExpense(null);
-    setForm(emptyForm);
-    setMessage("");
-    setError("");
-  }
-
-  function handleSelectSupplier(supplier) {
-    setForm((currentForm) => ({
-      ...currentForm,
-      supplierName: supplier.name,
-      category: getExpenseCategoryFromSupplier(supplier.category),
-    }));
-  }
-
-  function handleSelectExpense(expense) {
-    setSelectedExpense(expense);
-    setMessage("");
-    setError("");
-
-    setForm({
-      supplierName: expense.supplierName || "",
-      invoiceNo: expense.invoiceNo || "",
-      invoiceDate: getDateInputValue(expense.invoiceDate || expense.createdAt),
-      category: expense.category || "Gider Faturası",
-      description: expense.description || "",
-      netAmount: String(expense.netAmount || ""),
-      taxAmount: String(expense.taxAmount || ""),
-      totalAmount: String(expense.totalAmount || ""),
-      paymentStatus: expense.paymentStatus || "UNPAID",
-      status:
-        expense.status === "WAITING_AI"
-          ? "APPROVED"
-          : expense.status || "APPROVED",
-      note: expense.note || "",
-    });
-  }
-
   function handleFormChange(event) {
     const { name, value } = event.target;
 
@@ -286,21 +182,65 @@ export default function ExpenseManagementPage({ user }) {
     }));
   }
 
-  function calculateTotal() {
-    const netAmount = Number(form.netAmount || 0);
-    const taxAmount = Number(form.taxAmount || 0);
+  function handleNewOrder() {
+    localStorage.removeItem("handsoff_purchase_order_draft");
+    setSelectedOrder(null);
+    setForm(emptyForm);
+    setMessage("");
+    setError("");
+  }
 
+  function handleSelectSupplier(supplier) {
     setForm((currentForm) => ({
       ...currentForm,
-      totalAmount: String(netAmount + taxAmount),
+      supplierId: String(supplier.id),
+      supplierName: supplier.name,
+      category: getPurchaseCategoryFromSupplier(supplier.category),
     }));
   }
 
-  async function handleSaveExpense(event) {
+  function handleSelectOrder(order) {
+    setSelectedOrder(order);
+    setMessage("");
+    setError("");
+
+    setForm({
+      supplierId: order.supplierId ? String(order.supplierId) : "",
+      supplierName: order.supplierName || "",
+      orderNo: order.orderNo || "",
+      orderDate: getDateInputValue(order.orderDate || order.createdAt),
+      category: order.category || "Stok / Satın Alma",
+      itemName: order.itemName || "",
+      quantity: String(order.quantity || "1"),
+      unit: order.unit || "adet",
+      unitPrice: String(order.unitPrice || ""),
+      totalAmount: String(order.totalAmount || ""),
+      paymentStatus: order.paymentStatus || "UNPAID",
+      status: order.status || "DRAFT",
+      note: order.note || "",
+    });
+  }
+
+  function calculateTotal() {
+    const quantity = Number(form.quantity || 0);
+    const unitPrice = Number(form.unitPrice || 0);
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      totalAmount: String(quantity * unitPrice),
+    }));
+  }
+
+  async function handleSaveOrder(event) {
     event.preventDefault();
 
     if (!form.supplierName.trim()) {
-      setError("Lütfen tedarikçi veya gider adı gir.");
+      setError("Lütfen tedarikçi seç veya tedarikçi adı yaz.");
+      return;
+    }
+
+    if (!form.itemName.trim()) {
+      setError("Lütfen ürün / kalem adı yaz.");
       return;
     }
 
@@ -311,11 +251,11 @@ export default function ExpenseManagementPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const url = selectedExpense
-        ? `http://localhost:4000/api/expenses/${selectedExpense.id}`
-        : "http://localhost:4000/api/expenses";
+      const url = selectedOrder
+        ? `http://localhost:4000/api/purchase-orders/${selectedOrder.id}`
+        : "http://localhost:4000/api/purchase-orders";
 
-      const method = selectedExpense ? "PUT" : "POST";
+      const method = selectedOrder ? "PUT" : "POST";
 
       const response = await fetch(url, {
         method,
@@ -329,30 +269,30 @@ export default function ExpenseManagementPage({ user }) {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.message || "Gider kaydı kaydedilemedi.");
+        setError(data.message || "Satın alma talebi kaydedilemedi.");
         return;
       }
 
-      localStorage.removeItem("handsoff_expense_form_draft");
+      localStorage.removeItem("handsoff_purchase_order_draft");
 
       setMessage(
-        selectedExpense
-          ? "Gider kaydı güncellendi."
-          : "Manuel gider kaydı oluşturuldu."
+        selectedOrder
+          ? "Satın alma talebi güncellendi."
+          : "Satın alma talebi oluşturuldu."
       );
 
-      setSelectedExpense(data.expense || null);
-      await fetchExpenses();
+      setSelectedOrder(data.purchaseOrder || null);
+      await fetchPurchaseOrders();
     } catch {
-      setError("Gider kaydı kaydedilirken backend bağlantısı kurulamadı.");
+      setError("Satın alma talebi kaydedilirken backend bağlantısı kurulamadı.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleCancelExpense(expense) {
+  async function handleCancelOrder(order) {
     const confirmed = window.confirm(
-      "Bu gider kaydı iptal edilecek. Aylık toplamdan düşecek ama kayıt listede İptal olarak kalacak. Devam edilsin mi?"
+      "Bu satın alma talebi iptal edilecek. Devam edilsin mi?"
     );
 
     if (!confirmed) {
@@ -367,7 +307,7 @@ export default function ExpenseManagementPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/expenses/${expense.id}`,
+        `http://localhost:4000/api/purchase-orders/${order.id}`,
         {
           method: "PUT",
           headers: {
@@ -376,9 +316,9 @@ export default function ExpenseManagementPage({ user }) {
           },
           body: JSON.stringify({
             status: "CANCELLED",
-            note: expense.note
-              ? expense.note + "\nKayıt iptal edildi."
-              : "Kayıt iptal edildi.",
+            note: order.note
+              ? order.note + "\nSatın alma talebi iptal edildi."
+              : "Satın alma talebi iptal edildi.",
           }),
         }
       );
@@ -386,16 +326,100 @@ export default function ExpenseManagementPage({ user }) {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.message || "Gider kaydı iptal edilemedi.");
+        setError(data.message || "Satın alma talebi iptal edilemedi.");
         return;
       }
 
-      setMessage("Gider kaydı iptal edildi.");
-      setSelectedExpense(null);
+      setMessage("Satın alma talebi iptal edildi.");
+      setSelectedOrder(null);
       setForm(emptyForm);
-      await fetchExpenses();
+      await fetchPurchaseOrders();
     } catch {
-      setError("Gider kaydı iptal edilirken backend bağlantısı kurulamadı.");
+      setError("Satın alma iptal edilirken backend bağlantısı kurulamadı.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreateStockMovement(order) {
+    const confirmed = window.confirm(
+      "Bu satın alma talebi stoğa aktarılacak. Devam edilsin mi?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch(
+        `http://localhost:4000/api/purchase-orders/${order.id}/create-stock-movement`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + token,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Satın alma talebi stoğa aktarılamadı.");
+        return;
+      }
+
+      setMessage("Satın alma talebi stoğa aktarıldı.");
+      await fetchPurchaseOrders();
+    } catch {
+      setError("Stoğa aktarılırken backend bağlantısı kurulamadı.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreateExpense(order) {
+    const confirmed = window.confirm(
+      "Bu satın alma talebi Gider Yönetimi’ne aktarılacak. Devam edilsin mi?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch(
+        `http://localhost:4000/api/purchase-orders/${order.id}/create-expense`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + token,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Satın alma giderlere aktarılamadı.");
+        return;
+      }
+
+      setMessage("Satın alma talebi Gider Yönetimi’ne aktarıldı.");
+      await fetchPurchaseOrders();
+    } catch {
+      setError("Giderlere aktarılırken backend bağlantısı kurulamadı.");
     } finally {
       setSaving(false);
     }
@@ -403,81 +427,39 @@ export default function ExpenseManagementPage({ user }) {
 
   const activeSuppliers = suppliers.filter((supplier) => supplier.isActive);
 
-  const selectedSupplierInfo = suppliers.find(
-    (supplier) => supplier.name === form.supplierName
+  const activeOrders = purchaseOrders.filter(
+    (order) => order.status !== "CANCELLED"
   );
 
-  const monthOptions = useMemo(() => {
-    const keys = expenses.map((expense) =>
-      getMonthKey(expense.invoiceDate || expense.createdAt)
-    );
-
-    const uniqueKeys = Array.from(new Set([...keys, getMonthKey(new Date())]));
-
-    return uniqueKeys.sort().reverse();
-  }, [expenses]);
-
-  const filteredExpenses = useMemo(() => {
-    return expenses.filter((expense) => {
-      const monthKey = getMonthKey(expense.invoiceDate || expense.createdAt);
-
-      return monthKey === selectedMonth;
-    });
-  }, [expenses, selectedMonth]);
-
-  const activeExpenses = useMemo(() => {
-    return filteredExpenses.filter((expense) => expense.status !== "CANCELLED");
-  }, [filteredExpenses]);
-
-  const monthlyTotal = activeExpenses.reduce((total, expense) => {
-    return total + Number(expense.totalAmount || 0);
+  const totalPurchaseAmount = activeOrders.reduce((total, order) => {
+    return total + Number(order.totalAmount || 0);
   }, 0);
 
-  const approvedTotal = activeExpenses
-    .filter((expense) => expense.status === "APPROVED")
-    .reduce((total, expense) => total + Number(expense.totalAmount || 0), 0);
+  const unpaidAmount = activeOrders
+    .filter((order) => order.paymentStatus === "UNPAID")
+    .reduce((total, order) => total + Number(order.totalAmount || 0), 0);
 
-  const waitingAiCount = activeExpenses.filter(
-    (expense) => expense.status === "WAITING_AI"
+  const transferredAmount = activeOrders
+    .filter((order) => order.expenseCreated)
+    .reduce((total, order) => total + Number(order.totalAmount || 0), 0);
+
+  const waitingTransferCount = activeOrders.filter(
+    (order) => !order.expenseCreated
   ).length;
-
-  const unpaidCount = activeExpenses.filter(
-    (expense) => expense.paymentStatus === "UNPAID"
-  ).length;
-
-  const unpaidTotal = activeExpenses
-    .filter((expense) => expense.paymentStatus === "UNPAID")
-    .reduce((total, expense) => total + Number(expense.totalAmount || 0), 0);
-
-  const paidTotal = activeExpenses
-    .filter((expense) => expense.paymentStatus === "PAID")
-    .reduce((total, expense) => total + Number(expense.totalAmount || 0), 0);
 
   const categorySummary = useMemo(() => {
     const summaryMap = new Map();
 
-    activeExpenses.forEach((expense) => {
-      const category = expense.category || "Diğer";
+    activeOrders.forEach((order) => {
+      const category = order.category || "Stok / Satın Alma";
       const current = summaryMap.get(category) || {
         category,
         count: 0,
         totalAmount: 0,
-        approvedAmount: 0,
-        unpaidAmount: 0,
       };
 
-      const totalAmount = Number(expense.totalAmount || 0);
-
       current.count += 1;
-      current.totalAmount += totalAmount;
-
-      if (expense.status === "APPROVED") {
-        current.approvedAmount += totalAmount;
-      }
-
-      if (expense.paymentStatus === "UNPAID") {
-        current.unpaidAmount += totalAmount;
-      }
+      current.totalAmount += Number(order.totalAmount || 0);
 
       summaryMap.set(category, current);
     });
@@ -485,11 +467,11 @@ export default function ExpenseManagementPage({ user }) {
     return Array.from(summaryMap.values()).sort(
       (a, b) => b.totalAmount - a.totalAmount
     );
-  }, [activeExpenses]);
+  }, [purchaseOrders]);
 
-  function getSupplierInfoByName(supplierName) {
-    return suppliers.find((supplier) => supplier.name === supplierName);
-  }
+  const selectedSupplierInfo = suppliers.find(
+    (supplier) => supplier.name === form.supplierName
+  );
 
   return (
     <div className="page">
@@ -498,12 +480,11 @@ export default function ExpenseManagementPage({ user }) {
           <div>
             <p className="eyebrow">HandsOff / {user.restaurantName}</p>
 
-            <h1>Gider Yönetimi</h1>
+            <h1>Satın Alma Talepleri</h1>
 
             <p>
-              Yüklenen faturalar ve manuel giderler bu ekranda aylık olarak
-              tutulur. Kategori bazlı özet, ödeme durumu ve onaylı giderler
-              buradan takip edilir.
+              Tedarikçiden yapılan satın almaları, satın alma taleplerini ve giderlere
+              aktarılması gereken kayıtları buradan yönetebilirsin.
             </p>
           </div>
 
@@ -511,7 +492,7 @@ export default function ExpenseManagementPage({ user }) {
             className="hero-button"
             type="button"
             onClick={() => {
-              fetchExpenses();
+              fetchPurchaseOrders();
               fetchSuppliers();
             }}
           >
@@ -543,37 +524,37 @@ export default function ExpenseManagementPage({ user }) {
         }}
       >
         <div className="stat-card">
-          <p>Aylık Gider Toplamı</p>
-          <h3>{formatMoney(monthlyTotal)}</h3>
-          <span>{getMonthLabel(selectedMonth)}</span>
+          <p>Toplam Satın Alma</p>
+          <h3>{formatMoney(totalPurchaseAmount)}</h3>
+          <span>{activeOrders.length} aktif kayıt</span>
         </div>
 
         <div className="stat-card">
-          <p>Onaylı Gider</p>
-          <h3>{formatMoney(approvedTotal)}</h3>
-          <span>Aylık onaylanan kayıtlar</span>
+          <p>Ödenmemiş</p>
+          <h3>{formatMoney(unpaidAmount)}</h3>
+          <span>Tedarikçi borcu olarak takip edilir</span>
         </div>
 
         <div className="stat-card">
-          <p>Ödenmemiş Tutar</p>
-          <h3>{formatMoney(unpaidTotal)}</h3>
-          <span>{unpaidCount} kayıt ödenmemiş</span>
+          <p>Gidere Aktarılan</p>
+          <h3>{formatMoney(transferredAmount)}</h3>
+          <span>Gider Yönetimi’ne düşen kayıtlar</span>
         </div>
 
         <div className="stat-card">
-          <p>Ödenmiş Tutar</p>
-          <h3>{formatMoney(paidTotal)}</h3>
-          <span>{waitingAiCount} fatura AI bekliyor</span>
+          <p>Aktarım Bekleyen</p>
+          <h3>{waitingTransferCount}</h3>
+          <span>Gider Yönetimi’ne aktarılmamış kayıt</span>
         </div>
       </div>
 
       <div className="panel">
         <div className="panel-head">
           <div>
-            <h2>Kategori Bazlı Aylık Özet</h2>
+            <h2>Kategori Özeti</h2>
 
             <p className="panel-sub">
-              Seçili ay içindeki giderlerin kategori kırılımı.
+              Satın alma taleplerinın kategori bazlı dağılımı.
             </p>
           </div>
 
@@ -586,15 +567,13 @@ export default function ExpenseManagementPage({ user }) {
               <th>Kategori</th>
               <th>Kayıt</th>
               <th>Toplam</th>
-              <th>Onaylı</th>
-              <th>Ödenmemiş</th>
             </tr>
           </thead>
 
           <tbody>
             {categorySummary.length === 0 ? (
               <tr>
-                <td colSpan="5">Bu ay için kategori özeti yok.</td>
+                <td colSpan="3">Henüz kategori özeti yok.</td>
               </tr>
             ) : (
               categorySummary.map((item) => (
@@ -602,8 +581,6 @@ export default function ExpenseManagementPage({ user }) {
                   <td>{item.category}</td>
                   <td>{item.count}</td>
                   <td>{formatMoney(item.totalAmount)}</td>
-                  <td>{formatMoney(item.approvedAmount)}</td>
-                  <td>{formatMoney(item.unpaidAmount)}</td>
                 </tr>
               ))
             )}
@@ -615,38 +592,37 @@ export default function ExpenseManagementPage({ user }) {
         <div className="panel-head">
           <div>
             <h2>
-              {selectedExpense
-                ? "Gider Düzenle / Onayla"
-                : "Yeni Manuel Gider Ekle"}
+              {selectedOrder
+                ? "Satın Alma Talebinı Düzenle"
+                : "Yeni Satın Alma Talebi"}
             </h2>
 
             <p className="panel-sub">
-              Fatura yüklemeden de kira, personel, elektrik, pazarlama veya
-              diğer giderleri manuel ekleyebilirsin. Kayıtlı tedarikçi varsa
-              butondan seçebilir, yoksa manuel yazabilirsin.
+              Tedarikçi seç, ürün veya talep kalemini gir, toplamı hesapla ve
+              istersen Gider Yönetimi’ne aktar.
             </p>
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
             <span className="mini-pill">
-              {selectedExpense ? "Seçili Kayıt" : "Yeni Kayıt"}
+              {selectedOrder ? "Seçili Kayıt" : "Yeni Kayıt"}
             </span>
 
             <button
               className="hero-button"
               type="button"
-              onClick={handleNewExpense}
+              onClick={handleNewOrder}
             >
-              Yeni Gider
+              Yeni Satın Alma
             </button>
           </div>
         </div>
 
-        <form onSubmit={handleSaveExpense}>
+        <form onSubmit={handleSaveOrder}>
           <table className="module-table">
             <tbody>
               <tr>
-                <td>Tedarikçi / Gider Adı</td>
+                <td>Tedarikçi</td>
                 <td>
                   <div style={{ display: "grid", gap: 12 }}>
                     <div
@@ -694,7 +670,7 @@ export default function ExpenseManagementPage({ user }) {
                       name="supplierName"
                       value={form.supplierName}
                       onChange={handleFormChange}
-                      placeholder="Tedarikçiye tıkla ya da manuel gider adı yaz"
+                      placeholder="Tedarikçiye tıkla ya da manuel tedarikçi adı yaz"
                       style={{
                         width: "100%",
                         padding: 12,
@@ -702,11 +678,6 @@ export default function ExpenseManagementPage({ user }) {
                         border: "1px solid #cbd5e1",
                       }}
                     />
-
-                    <small style={{ color: "#64748b" }}>
-                      Kayıtlı tedarikçi: {suppliers.length} / Aktif:{" "}
-                      {activeSuppliers.length}
-                    </small>
 
                     {selectedSupplierInfo && (
                       <div
@@ -721,33 +692,11 @@ export default function ExpenseManagementPage({ user }) {
                         }}
                       >
                         <strong>Seçili Tedarikçi Bilgileri</strong>
-
-                        <span>
-                          Tedarikçi Kategorisi: {selectedSupplierInfo.category || "-"}
-                        </span>
-
-                        <span>
-                          Otomatik Gider Kategorisi:{" "}
-                          {getExpenseCategoryFromSupplier(
-                            selectedSupplierInfo.category
-                          )}
-                        </span>
-
-                        <span>
-                          Vergi No: {selectedSupplierInfo.taxNumber || "-"}
-                        </span>
-
-                        <span>
-                          IBAN: {selectedSupplierInfo.iban || "-"}
-                        </span>
-
-                        <span>
-                          Yetkili: {selectedSupplierInfo.contactName || "-"}
-                        </span>
-
-                        <span>
-                          Telefon: {selectedSupplierInfo.phone || "-"}
-                        </span>
+                        <span>Kategori: {selectedSupplierInfo.category || "-"}</span>
+                        <span>Vergi No: {selectedSupplierInfo.taxNumber || "-"}</span>
+                        <span>IBAN: {selectedSupplierInfo.iban || "-"}</span>
+                        <span>Yetkili: {selectedSupplierInfo.contactName || "-"}</span>
+                        <span>Telefon: {selectedSupplierInfo.phone || "-"}</span>
                       </div>
                     )}
                   </div>
@@ -755,13 +704,13 @@ export default function ExpenseManagementPage({ user }) {
               </tr>
 
               <tr>
-                <td>Fatura No</td>
+                <td>Talep No</td>
                 <td>
                   <input
-                    name="invoiceNo"
-                    value={form.invoiceNo}
+                    name="orderNo"
+                    value={form.orderNo}
                     onChange={handleFormChange}
-                    placeholder="Varsa fatura numarası"
+                    placeholder="Varsa talep numarası"
                     style={{
                       width: "100%",
                       padding: 12,
@@ -773,12 +722,12 @@ export default function ExpenseManagementPage({ user }) {
               </tr>
 
               <tr>
-                <td>Fatura / Gider Tarihi</td>
+                <td>Talep Tarihi</td>
                 <td>
                   <input
                     type="date"
-                    name="invoiceDate"
-                    value={form.invoiceDate}
+                    name="orderDate"
+                    value={form.orderDate}
                     onChange={handleFormChange}
                     style={{
                       width: "100%",
@@ -804,7 +753,6 @@ export default function ExpenseManagementPage({ user }) {
                       border: "1px solid #cbd5e1",
                     }}
                   >
-                    <option value="Gider Faturası">Gider Faturası</option>
                     <option value="Stok / Satın Alma">Stok / Satın Alma</option>
                     <option value="Et / Tavuk">Et / Tavuk</option>
                     <option value="Balık">Balık</option>
@@ -813,30 +761,21 @@ export default function ExpenseManagementPage({ user }) {
                     <option value="Alkol">Alkol</option>
                     <option value="Kuru Gıda">Kuru Gıda</option>
                     <option value="Temizlik">Temizlik</option>
-                    <option value="Kira">Kira</option>
-                    <option value="Personel">Personel</option>
-                    <option value="Elektrik / Su / Doğalgaz">
-                      Elektrik / Su / Doğalgaz
-                    </option>
-                    <option value="Pazarlama">Pazarlama</option>
                     <option value="Bakım / Onarım">Bakım / Onarım</option>
-                    <option value="Vergi / Resmi Ödeme">
-                      Vergi / Resmi Ödeme
-                    </option>
+                    <option value="Pazarlama">Pazarlama</option>
                     <option value="Diğer">Diğer</option>
                   </select>
                 </td>
               </tr>
 
               <tr>
-                <td>Ara Toplam</td>
+                <td>Talep Edilen Ürün / Kalem</td>
                 <td>
                   <input
-                    type="number"
-                    name="netAmount"
-                    value={form.netAmount}
+                    name="itemName"
+                    value={form.itemName}
                     onChange={handleFormChange}
-                    placeholder="KDV hariç tutar"
+                    placeholder="Örn: Dana bonfile, şarap, sebze kasası, temizlik ürünü"
                     style={{
                       width: "100%",
                       padding: 12,
@@ -848,14 +787,14 @@ export default function ExpenseManagementPage({ user }) {
               </tr>
 
               <tr>
-                <td>KDV</td>
+                <td>Miktar</td>
                 <td>
                   <input
                     type="number"
-                    name="taxAmount"
-                    value={form.taxAmount}
+                    name="quantity"
+                    value={form.quantity}
                     onChange={handleFormChange}
-                    placeholder="KDV tutarı"
+                    placeholder="Miktar"
                     style={{
                       width: "100%",
                       padding: 12,
@@ -867,7 +806,52 @@ export default function ExpenseManagementPage({ user }) {
               </tr>
 
               <tr>
-                <td>Genel Toplam</td>
+                <td>Birim</td>
+                <td>
+                  <select
+                    name="unit"
+                    value={form.unit}
+                    onChange={handleFormChange}
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  >
+                    <option value="adet">adet</option>
+                    <option value="kg">kg</option>
+                    <option value="gr">gr</option>
+                    <option value="lt">lt</option>
+                    <option value="ml">ml</option>
+                    <option value="koli">koli</option>
+                    <option value="şişe">şişe</option>
+                    <option value="paket">paket</option>
+                  </select>
+                </td>
+              </tr>
+
+              <tr>
+                <td>Birim Fiyat</td>
+                <td>
+                  <input
+                    type="number"
+                    name="unitPrice"
+                    value={form.unitPrice}
+                    onChange={handleFormChange}
+                    placeholder="Birim fiyat"
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  />
+                </td>
+              </tr>
+
+              <tr>
+                <td>Toplam</td>
                 <td>
                   <div style={{ display: "flex", gap: 10 }}>
                     <input
@@ -875,7 +859,7 @@ export default function ExpenseManagementPage({ user }) {
                       name="totalAmount"
                       value={form.totalAmount}
                       onChange={handleFormChange}
-                      placeholder="Genel toplam"
+                      placeholder="Toplam tutar"
                       style={{
                         flex: 1,
                         padding: 12,
@@ -917,7 +901,7 @@ export default function ExpenseManagementPage({ user }) {
               </tr>
 
               <tr>
-                <td>Onay Durumu</td>
+                <td>Kayıt Durumu</td>
                 <td>
                   <select
                     name="status"
@@ -930,30 +914,10 @@ export default function ExpenseManagementPage({ user }) {
                       border: "1px solid #cbd5e1",
                     }}
                   >
-                    <option value="WAITING_AI">AI okuma bekliyor</option>
                     <option value="DRAFT">Taslak</option>
                     <option value="APPROVED">Onaylandı</option>
                     <option value="CANCELLED">İptal</option>
                   </select>
-                </td>
-              </tr>
-
-              <tr>
-                <td>Açıklama</td>
-                <td>
-                  <textarea
-                    name="description"
-                    value={form.description}
-                    onChange={handleFormChange}
-                    rows="3"
-                    placeholder="Gider açıklaması"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
                 </td>
               </tr>
 
@@ -986,9 +950,9 @@ export default function ExpenseManagementPage({ user }) {
           >
             {saving
               ? "Kaydediliyor..."
-              : selectedExpense
-                ? "Gider Kaydını Güncelle"
-                : "Manuel Gider Ekle"}
+              : selectedOrder
+                ? "Satın Alma Talebinı Güncelle"
+                : "Satın Alma Talebi Oluştur"}
           </button>
         </form>
       </div>
@@ -996,75 +960,62 @@ export default function ExpenseManagementPage({ user }) {
       <div className="panel">
         <div className="panel-head">
           <div>
-            <h2>Aylık Giderler</h2>
+            <h2>Satın Alma Kayıtları</h2>
 
             <p className="panel-sub">
-              Faturalar fatura tarihine göre; fatura tarihi yoksa yüklenme
-              tarihine göre aylık listelenir.
+              Kayıtları düzenleyebilir, iptal edebilir veya Gider Yönetimi’ne
+              aktarabilirsin.
             </p>
           </div>
 
-          <select
-            value={selectedMonth}
-            onChange={(event) => setSelectedMonth(event.target.value)}
-            style={{
-              padding: "12px 14px",
-              borderRadius: 12,
-              border: "1px solid #cbd5e1",
-              background: "#ffffff",
-              minWidth: 180,
-            }}
-          >
-            {monthOptions.map((monthKey) => (
-              <option key={monthKey} value={monthKey}>
-                {getMonthLabel(monthKey)}
-              </option>
-            ))}
-          </select>
+          <span className="mini-pill">{purchaseOrders.length} kayıt</span>
         </div>
 
         <table className="module-table">
           <thead>
             <tr>
               <th>İşlem</th>
-              <th>Tedarikçi / Gider</th>
-              <th>Kategori</th>
-              <th>Tarih</th>
-              <th>Tutar</th>
+              <th>Tedarikçi</th>
+              <th>Talep Edilen Ürün / Kalem</th>
+              <th>Talep Tarihi</th>
+              <th>Miktar</th>
+              <th>Birim Fiyat</th>
+              <th>Toplam</th>
               <th>Ödeme</th>
               <th>Durum</th>
-              <th>Kaynak</th>
+              <th>Gider Aktarım</th>
+              <th>Stok Aktarım</th>
             </tr>
           </thead>
 
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="8">Gider kayıtları yükleniyor...</td>
+                <td colSpan="11">Satın alma talepleri yükleniyor...</td>
               </tr>
-            ) : filteredExpenses.length === 0 ? (
+            ) : purchaseOrders.length === 0 ? (
               <tr>
-                <td colSpan="8">Bu ay için gider kaydı yok.</td>
+                <td colSpan="11">Henüz satın alma kaydı yok.</td>
               </tr>
             ) : (
-              filteredExpenses.map((expense) => (
-                <tr key={expense.id}>
+              purchaseOrders.map((order) => (
+                <tr key={order.id}>
                   <td>
-                    <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                       <button
                         type="button"
                         className="hero-button"
-                        onClick={() => handleSelectExpense(expense)}
+                        onClick={() => handleSelectOrder(order)}
                         style={{ padding: "8px 12px", borderRadius: 12 }}
                       >
                         Düzenle
                       </button>
 
-                      {expense.status !== "CANCELLED" && (
+                      {order.status !== "CANCELLED" && (
                         <button
                           type="button"
                           className="hero-button"
-                          onClick={() => handleCancelExpense(expense)}
+                          onClick={() => handleCancelOrder(order)}
                           style={{
                             padding: "8px 12px",
                             borderRadius: 12,
@@ -1074,50 +1025,87 @@ export default function ExpenseManagementPage({ user }) {
                           İptal Et
                         </button>
                       )}
+
+                      {!order.expenseCreated &&
+                        order.status !== "CANCELLED" && (
+                          <button
+                            type="button"
+                            className="hero-button"
+                            onClick={() => handleCreateExpense(order)}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: 12,
+                              background: "#166534",
+                            }}
+                          >
+                            Gidere Aktar
+                          </button>
+                        )}
+
+                      {!order.stockMovementCreated &&
+                        order.status !== "CANCELLED" && (
+                          <button
+                            type="button"
+                            className="hero-button"
+                            onClick={() => handleCreateStockMovement(order)}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: 12,
+                              background: "#1d4ed8",
+                            }}
+                          >
+                            Stoğa Aktar
+                          </button>
+                        )}
                     </div>
                   </td>
 
                   <td>
                     <div style={{ display: "grid", gap: 4 }}>
-                      <strong>{expense.supplierName}</strong>
+                      <strong>{order.supplierName}</strong>
 
-                      {getSupplierInfoByName(expense.supplierName) ? (
+                      {order.supplier && (
                         <small style={{ color: "#64748b", lineHeight: 1.6 }}>
-                          Vergi No:{" "}
-                          {getSupplierInfoByName(expense.supplierName)
-                            ?.taxNumber || "-"}
+                          Vergi No: {order.supplier.taxNumber || "-"}
                           <br />
-                          IBAN:{" "}
-                          {getSupplierInfoByName(expense.supplierName)?.iban ||
-                            "-"}
+                          IBAN: {order.supplier.iban || "-"}
                           <br />
-                          Yetkili:{" "}
-                          {getSupplierInfoByName(expense.supplierName)
-                            ?.contactName || "-"}
-                          <br />
-                          Telefon:{" "}
-                          {getSupplierInfoByName(expense.supplierName)?.phone ||
-                            "-"}
-                        </small>
-                      ) : (
-                        <small style={{ color: "#94a3b8" }}>
-                          Manuel gider / kayıtlı tedarikçi eşleşmedi
+                          Yetkili: {order.supplier.contactName || "-"}
                         </small>
                       )}
                     </div>
                   </td>
-                  <td>{expense.category}</td>
-                  <td>{formatDate(expense.invoiceDate || expense.createdAt)}</td>
-                  <td>{formatMoney(expense.totalAmount)}</td>
+
                   <td>
-                    {paymentStatusLabels[expense.paymentStatus] ||
-                      expense.paymentStatus}
+                    <div style={{ display: "grid", gap: 4 }}>
+                      <strong>{order.itemName}</strong>
+                      <small style={{ color: "#64748b" }}>
+                        {order.category} / No: {order.orderNo || "-"}
+                      </small>
+                    </div>
                   </td>
-                  <td>{statusLabels[expense.status] || expense.status}</td>
+
+                  <td>{formatDate(order.orderDate || order.createdAt)}</td>
                   <td>
-                    {expense.uploadedDocument
-                      ? expense.uploadedDocument.originalName
-                      : "Manuel kayıt"}
+                    {order.quantity} {order.unit}
+                  </td>
+                  <td>{formatMoney(order.unitPrice)}</td>
+                  <td>{formatMoney(order.totalAmount)}</td>
+                  <td>
+                    {paymentStatusLabels[order.paymentStatus] ||
+                      order.paymentStatus}
+                  </td>
+                  <td>{statusLabels[order.status] || order.status}</td>
+                  <td>
+                    {order.expenseCreated
+                      ? "Gider Yönetimi’ne aktarıldı"
+                      : "Aktarım bekliyor"}
+                  </td>
+
+                  <td>
+                    {order.stockMovementCreated
+                      ? "Stoğa aktarıldı"
+                      : "Stok aktarımı bekliyor"}
                   </td>
                 </tr>
               ))

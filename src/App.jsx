@@ -4,6 +4,53 @@ import ReportUploadPage from "./ReportUploadPage";
 import ExpenseManagementPage from "./ExpenseManagementPage";
 import ProfitLossPage from "./ProfitLossPage";
 import SuppliersPage from "./SuppliersPage";
+import PurchaseOrdersPage from "./PurchaseOrdersPage";
+import InventoryPage from "./InventoryPage";
+import StockCountPage from "./StockCountPage";
+
+function isStockCountPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("stok say") ||
+    page.includes("stok sayım") ||
+    page.includes("stok sayim") ||
+    page.includes("sayım") ||
+    page.includes("sayim") ||
+    page.includes("stock count")
+  );
+}
+
+
+function isInventoryPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    (page.includes("stok") ||
+      page.includes("envanter") ||
+      page.includes("inventory")) &&
+    !page.includes("satın") &&
+    !page.includes("satin") &&
+    !page.includes("purchase")
+  );
+}
+
+
+function isPurchaseOrdersPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("satın") ||
+    page.includes("satin") ||
+    page.includes("purchase") ||
+    page.includes("satinalma") ||
+    page.includes("stok faturası") ||
+    page.includes("stok faturasi") ||
+    page.includes("stok / satın") ||
+    page.includes("stok / satin")
+  );
+}
+
 
 const menuGroups = [
   {
@@ -1692,7 +1739,24 @@ function ModulePage({ title }) {
 function Panel({ user, onLogout }) {
   const [activePage, setActivePage] = useState("Dashboard");
 
-  return (
+  
+
+  useEffect(() => {
+    function handleNavigate(event) {
+      if (!event.detail) {
+        return;
+      }
+
+      setActivePage(event.detail);
+    }
+
+    window.addEventListener("handsoff:navigate", handleNavigate);
+
+    return () => {
+      window.removeEventListener("handsoff:navigate", handleNavigate);
+    };
+  }, []);
+return (
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-brand-card">
@@ -1756,7 +1820,17 @@ function Panel({ user, onLogout }) {
         activePage === "Tedarikci Yonetimi" ? (
           <SuppliersPage user={user} />
         ) : (
+          isPurchaseOrdersPage(activePage) ? (
+          <PurchaseOrdersPage user={user} />
+        ) : (
+          isStockCountPage(activePage) ? (
+          <StockCountPage user={user} />
+        ) : isInventoryPage(activePage) ? (
+          <InventoryPage user={user} />
+        ) : (
           <ModulePage title={activePage} />
+        )
+        )
         )
         )
         )
