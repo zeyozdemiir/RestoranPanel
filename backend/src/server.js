@@ -2170,6 +2170,1202 @@ app.post("/api/stock-counts/:id/complete", authMiddleware, async (req, res) => {
 });
 
 
+
+
+function formatWasteInventoryItem(item) {
+  if (!item) {
+    return null;
+  }
+
+  return {
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    unit: item.unit,
+    currentStock: item.currentStock,
+    minStock: item.minStock,
+  };
+}
+
+function formatWasteRecord(record) {
+  return {
+    id: record.id,
+    type: record.type,
+    recordDate: record.recordDate,
+    itemName: record.itemName,
+    category: record.category,
+    quantity: record.quantity,
+    unit: record.unit,
+    estimatedUnitPrice: record.estimatedUnitPrice,
+    estimatedCost: record.estimatedCost,
+    reason: record.reason,
+    responsible: record.responsible,
+    note: record.note,
+    stockDeducted: record.stockDeducted,
+    status: record.status,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+    inventoryItem: formatWasteInventoryItem(record.inventoryItem),
+  };
+}
+
+app.get("/api/waste-records", authMiddleware, async (req, res) => {
+  try {
+    const records = await prisma.wasteRecord.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        inventoryItem: true,
+      },
+      orderBy: {
+        recordDate: "desc",
+      },
+    });
+
+    const summary = records.reduce(
+      (total, record) => {
+        const cost = Number(record.estimatedCost || 0);
+
+        total.totalCost += cost;
+        total.totalQuantity += Number(record.quantity || 0);
+
+        if (record.type === "WASTE") {
+          total.wasteCost += cost;
+        }
+
+        if (record.type === "BREAKAGE") {
+          total.breakageCost += cost;
+        }
+
+        if (record.type === "SPILL") {
+          total.spillCost += cost;
+        }
+
+        if (record.type === "STAFF_MEAL") {
+          total.staffMealCost += cost;
+        }
+
+        return total;
+      },
+      {
+        totalCost: 0,
+        totalQuantity: 0,
+        wasteCost: 0,
+        breakageCost: 0,
+        spillCost: 0,
+        staffMealCost: 0,
+      }
+    );
+
+    return res.json({
+      wasteRecords: records.map(formatWasteRecord),
+      summary,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Zayi / kırılma kayıtları alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/waste-records", authMiddleware, async (req, res) => {
+  try {
+    const {
+      type,
+      recordDate,
+      inventoryItemId,
+      itemName,
+      category,
+      quantity,
+      unit,
+      estimatedUnitPrice,
+      reason,
+      responsible,
+      note,
+      deductFromStock,
+    } = req.body;
+
+    const numericQuantity = Number(quantity || 0);
+    const numericEstimatedUnitPrice = Number(estimatedUnitPrice || 0);
+    const estimatedCost = numericQuantity * numericEstimatedUnitPrice;
+
+    if (!itemName && !inventoryItemId) {
+      return res.status(400).json({
+        message: "Ürün / stok adı zorunludur.",
+      });
+    }
+
+    if (numericQuantity <= 0) {
+      return res.status(400).json({
+        message: "Miktar 0'dan büyük olmalıdır.",
+      });
+    }
+
+    let inventoryItem = null;
+
+    if (inventoryItemId) {
+      inventoryItem = await prisma.inventoryItem.findFirst({
+        where: {
+          id: Number(inventoryItemId),
+          restaurantId: req.user.restaurantId,
+        },
+      });
+
+      if (!inventoryItem) {
+        return res.status(404).json({
+          message: "Stok kartı bulunamadı.",
+        });
+      }
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const record = await tx.wasteRecord.create({
+        data: {
+          restaurantId: req.user.restaurantId,
+          inventoryItemId: inventoryItem ? inventoryItem.id : null,
+          type: type || "WASTE",
+          recordDate: recordDate ? new Date(recordDate) : new Date(),
+          itemName: inventoryItem ? inventoryItem.name : String(itemName).trim(),
+          category: inventoryItem
+            ? inventoryItem.category
+            : category || "Genel",
+          quantity: numericQuantity,
+          unit: inventoryItem ? inventoryItem.unit : unit || "adet",
+          estimatedUnitPrice: numericEstimatedUnitPrice,
+          estimatedCost,
+          reason: reason || null,
+          responsible: responsible || null,
+          note: note || null,
+          stockDeducted: Boolean(inventoryItem && deductFromStock),
+          status: "RECORDED",
+        },
+        include: {
+          inventoryItem: true,
+        },
+      });
+
+      if (inventoryItem && deductFromStock) {
+        await tx.inventoryItem.update({
+          where: {
+            id: inventoryItem.id,
+          },
+          data: {
+            currentStock: {
+              decrement: numericQuantity,
+            },
+          },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            restaurantId: req.user.restaurantId,
+            inventoryItemId: inventoryItem.id,
+            type:
+              record.type === "BREAKAGE"
+                ? "BREAKAGE_OUT"
+                : record.type === "SPILL"
+                  ? "SPILL_OUT"
+                  : record.type === "STAFF_MEAL"
+                    ? "STAFF_MEAL_OUT"
+                    : "WASTE_OUT",
+            movementDate: record.recordDate,
+            quantity: -numericQuantity,
+            unit: record.unit,
+            unitPrice: numericEstimatedUnitPrice,
+            totalAmount: -estimatedCost,
+            source: "WASTE_RECORD",
+            note:
+              "Zayi / kırılma kaydı: " +
+              (record.reason || record.note || record.type),
+          },
+        });
+      }
+
+      return tx.wasteRecord.findUnique({
+        where: {
+          id: record.id,
+        },
+        include: {
+          inventoryItem: true,
+        },
+      });
+    });
+
+    return res.json({
+      message: inventoryItem && deductFromStock
+        ? "Zayi / kırılma kaydı oluşturuldu ve stoktan düşüldü."
+        : "Zayi / kırılma kaydı oluşturuldu.",
+      wasteRecord: formatWasteRecord(result),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Zayi / kırılma kaydı oluşturulamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.put("/api/waste-records/:id/cancel", authMiddleware, async (req, res) => {
+  try {
+    const recordId = Number(req.params.id);
+
+    const record = await prisma.wasteRecord.findFirst({
+      where: {
+        id: recordId,
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        inventoryItem: true,
+      },
+    });
+
+    if (!record) {
+      return res.status(404).json({
+        message: "Zayi / kırılma kaydı bulunamadı.",
+      });
+    }
+
+    if (record.status === "CANCELLED") {
+      return res.status(400).json({
+        message: "Bu kayıt zaten iptal edilmiş.",
+      });
+    }
+
+    const updatedRecord = await prisma.$transaction(async (tx) => {
+      if (record.inventoryItemId && record.stockDeducted) {
+        await tx.inventoryItem.update({
+          where: {
+            id: record.inventoryItemId,
+          },
+          data: {
+            currentStock: {
+              increment: Number(record.quantity || 0),
+            },
+          },
+        });
+
+        await tx.stockMovement.create({
+          data: {
+            restaurantId: req.user.restaurantId,
+            inventoryItemId: record.inventoryItemId,
+            type: "WASTE_CANCEL_RESTORE",
+            movementDate: new Date(),
+            quantity: Number(record.quantity || 0),
+            unit: record.unit,
+            unitPrice: Number(record.estimatedUnitPrice || 0),
+            totalAmount: Number(record.estimatedCost || 0),
+            source: "WASTE_RECORD_CANCEL",
+            note: "İptal edilen zayi / kırılma kaydı stoğa geri alındı.",
+          },
+        });
+      }
+
+      return tx.wasteRecord.update({
+        where: {
+          id: record.id,
+        },
+        data: {
+          status: "CANCELLED",
+        },
+        include: {
+          inventoryItem: true,
+        },
+      });
+    });
+
+    return res.json({
+      message: "Zayi / kırılma kaydı iptal edildi.",
+      wasteRecord: formatWasteRecord(updatedRecord),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Zayi / kırılma kaydı iptal edilemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+
+
+
+function normalizeSupplierKey(value) {
+  return String(value || "")
+    .trim()
+    .toLocaleLowerCase("tr-TR");
+}
+
+function readMoneyValue(item, keys) {
+  for (const key of keys) {
+    if (item && item[key] !== undefined && item[key] !== null && item[key] !== "") {
+      return Number(item[key] || 0);
+    }
+  }
+
+  return 0;
+}
+
+function getExpenseTotalAmountForStatement(expense) {
+  return readMoneyValue(expense, [
+    "totalAmount",
+    "amount",
+    "price",
+    "cost",
+    "paidAmount",
+  ]);
+}
+
+function getExpenseDebtAmountForStatement(expense) {
+  const totalAmount = getExpenseTotalAmountForStatement(expense);
+  const paymentStatus = String(expense.paymentStatus || "").toUpperCase();
+
+  if (paymentStatus === "PAID" || paymentStatus === "ODENDI" || paymentStatus === "ÖDENDI" || paymentStatus === "ÖDENDİ") {
+    return 0;
+  }
+
+  if (paymentStatus === "PARTIAL" || paymentStatus === "KISMI") {
+    const remainingAmount = readMoneyValue(expense, ["remainingAmount", "unpaidAmount"]);
+
+    if (remainingAmount > 0) {
+      return remainingAmount;
+    }
+
+    const paidAmount = readMoneyValue(expense, ["paidAmount"]);
+
+    if (paidAmount > 0) {
+      return Math.max(totalAmount - paidAmount, 0);
+    }
+  }
+
+  return totalAmount;
+}
+
+function formatSupplierPayment(payment) {
+  return {
+    id: payment.id,
+    paymentDate: payment.paymentDate,
+    supplierId: payment.supplierId,
+    supplierName: payment.supplierName,
+    amount: payment.amount,
+    method: payment.method,
+    note: payment.note,
+    status: payment.status,
+    createdAt: payment.createdAt,
+    updatedAt: payment.updatedAt,
+    supplier: payment.supplier
+      ? {
+          id: payment.supplier.id,
+          name: payment.supplier.name,
+          category: payment.supplier.category,
+          taxNumber: payment.supplier.taxNumber,
+          iban: payment.supplier.iban,
+          phone: payment.supplier.phone,
+          email: payment.supplier.email,
+          contactName: payment.supplier.contactName,
+        }
+      : null,
+  };
+}
+
+app.get("/api/supplier-payments", authMiddleware, async (req, res) => {
+  try {
+    const payments = await prisma.supplierPayment.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        supplier: true,
+      },
+      orderBy: {
+        paymentDate: "desc",
+      },
+    });
+
+    return res.json({
+      supplierPayments: payments.map(formatSupplierPayment),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Tedarikçi ödemeleri alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/supplier-payments", authMiddleware, async (req, res) => {
+  try {
+    const { supplierId, supplierName, paymentDate, amount, method, note } = req.body;
+
+    const numericAmount = Number(amount || 0);
+
+    if (numericAmount <= 0) {
+      return res.status(400).json({
+        message: "Ödeme tutarı 0'dan büyük olmalıdır.",
+      });
+    }
+
+    let supplier = null;
+
+    if (supplierId) {
+      supplier = await prisma.supplier.findFirst({
+        where: {
+          id: Number(supplierId),
+          restaurantId: req.user.restaurantId,
+        },
+      });
+
+      if (!supplier) {
+        return res.status(404).json({
+          message: "Tedarikçi bulunamadı.",
+        });
+      }
+    }
+
+    const finalSupplierName =
+      supplier?.name || String(supplierName || "").trim();
+
+    if (!finalSupplierName) {
+      return res.status(400).json({
+        message: "Tedarikçi adı zorunludur.",
+      });
+    }
+
+    const payment = await prisma.supplierPayment.create({
+      data: {
+        restaurantId: req.user.restaurantId,
+        supplierId: supplier ? supplier.id : null,
+        supplierName: finalSupplierName,
+        paymentDate: paymentDate ? new Date(paymentDate) : new Date(),
+        amount: numericAmount,
+        method: method || "BANK_TRANSFER",
+        note: note || null,
+        status: "ACTIVE",
+      },
+      include: {
+        supplier: true,
+      },
+    });
+
+    return res.json({
+      message: "Tedarikçi ödemesi kaydedildi.",
+      supplierPayment: formatSupplierPayment(payment),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Tedarikçi ödemesi kaydedilemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+app.put("/api/supplier-payments/:id/cancel", authMiddleware, async (req, res) => {
+  try {
+    const paymentId = Number(req.params.id);
+
+    const payment = await prisma.supplierPayment.findFirst({
+      where: {
+        id: paymentId,
+        restaurantId: req.user.restaurantId,
+      },
+      include: {
+        supplier: true,
+      },
+    });
+
+    if (!payment) {
+      return res.status(404).json({
+        message: "Tedarikçi ödemesi bulunamadı.",
+      });
+    }
+
+    if (payment.status === "CANCELLED") {
+      return res.status(400).json({
+        message: "Bu ödeme zaten iptal edilmiş.",
+      });
+    }
+
+    const updatedPayment = await prisma.supplierPayment.update({
+      where: {
+        id: payment.id,
+      },
+      data: {
+        status: "CANCELLED",
+      },
+      include: {
+        supplier: true,
+      },
+    });
+
+    return res.json({
+      message: "Tedarikçi ödemesi iptal edildi.",
+      supplierPayment: formatSupplierPayment(updatedPayment),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Tedarikçi ödemesi iptal edilemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+app.get("/api/supplier-statements", authMiddleware, async (req, res) => {
+  try {
+    const [suppliers, expenses, payments] = await Promise.all([
+      prisma.supplier.findMany({
+        where: {
+          restaurantId: req.user.restaurantId,
+        },
+        orderBy: {
+          name: "asc",
+        },
+      }),
+      prisma.expense.findMany({
+        where: {
+          restaurantId: req.user.restaurantId,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      }),
+      prisma.supplierPayment.findMany({
+        where: {
+          restaurantId: req.user.restaurantId,
+        },
+        include: {
+          supplier: true,
+        },
+        orderBy: {
+          paymentDate: "desc",
+        },
+      }),
+    ]);
+
+    const statementMap = new Map();
+
+    function ensureStatement({ supplierId, supplierName, supplier }) {
+      const key = supplierId
+        ? "id:" + supplierId
+        : "name:" + normalizeSupplierKey(supplierName);
+
+      if (!statementMap.has(key)) {
+        statementMap.set(key, {
+          key,
+          supplierId: supplierId || null,
+          supplierName: supplierName || "Tedarikçi belirtilmemiş",
+          supplier: supplier || null,
+          totalExpense: 0,
+          debtFromExpenses: 0,
+          paidBySupplierPayments: 0,
+          remainingDebt: 0,
+          expenseCount: 0,
+          paymentCount: 0,
+          expenses: [],
+          payments: [],
+        });
+      }
+
+      return statementMap.get(key);
+    }
+
+    suppliers.forEach((supplier) => {
+      ensureStatement({
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        supplier,
+      });
+    });
+
+    expenses.forEach((expense) => {
+      const status = String(expense.status || "").toUpperCase();
+
+      if (status === "CANCELLED" || status === "IPTAL") {
+        return;
+      }
+
+      const supplierId = expense.supplierId || null;
+      const supplierName =
+        expense.supplierName ||
+        expense.vendorName ||
+        expense.companyName ||
+        "Tedarikçi belirtilmemiş";
+
+      const matchedSupplier = supplierId
+        ? suppliers.find((supplier) => supplier.id === supplierId)
+        : suppliers.find(
+            (supplier) =>
+              normalizeSupplierKey(supplier.name) === normalizeSupplierKey(supplierName)
+          );
+
+      const statement = ensureStatement({
+        supplierId: matchedSupplier?.id || supplierId,
+        supplierName: matchedSupplier?.name || supplierName,
+        supplier: matchedSupplier || null,
+      });
+
+      const totalAmount = getExpenseTotalAmountForStatement(expense);
+      const debtAmount = getExpenseDebtAmountForStatement(expense);
+
+      statement.totalExpense += totalAmount;
+      statement.debtFromExpenses += debtAmount;
+      statement.expenseCount += 1;
+      statement.expenses.push({
+        id: expense.id,
+        title: expense.title || expense.description || expense.category || "Gider",
+        category: expense.category || "Genel",
+        date: expense.expenseDate || expense.date || expense.createdAt,
+        totalAmount,
+        debtAmount,
+        paymentStatus: expense.paymentStatus || "-",
+        status: expense.status || "-",
+      });
+    });
+
+    payments.forEach((payment) => {
+      const matchedSupplier = payment.supplierId
+        ? suppliers.find((supplier) => supplier.id === payment.supplierId)
+        : suppliers.find(
+            (supplier) =>
+              normalizeSupplierKey(supplier.name) === normalizeSupplierKey(payment.supplierName)
+          );
+
+      const statement = ensureStatement({
+        supplierId: matchedSupplier?.id || payment.supplierId,
+        supplierName: matchedSupplier?.name || payment.supplierName,
+        supplier: matchedSupplier || payment.supplier || null,
+      });
+
+      const isActive = payment.status !== "CANCELLED";
+
+      if (isActive) {
+        statement.paidBySupplierPayments += Number(payment.amount || 0);
+      }
+
+      statement.paymentCount += 1;
+      statement.payments.push(formatSupplierPayment(payment));
+    });
+
+    const statements = Array.from(statementMap.values()).map((statement) => {
+      const remainingDebt =
+        Number(statement.debtFromExpenses || 0) -
+        Number(statement.paidBySupplierPayments || 0);
+
+      return {
+        ...statement,
+        remainingDebt,
+        status:
+          remainingDebt > 0
+            ? "BORÇLU"
+            : remainingDebt < 0
+              ? "AVANS / ALACAK"
+              : "KAPALI",
+      };
+    });
+
+    const summary = statements.reduce(
+      (total, statement) => {
+        total.totalExpense += Number(statement.totalExpense || 0);
+        total.debtFromExpenses += Number(statement.debtFromExpenses || 0);
+        total.paidBySupplierPayments += Number(statement.paidBySupplierPayments || 0);
+        total.remainingDebt += Number(statement.remainingDebt || 0);
+
+        if (statement.remainingDebt > 0) {
+          total.debtSupplierCount += 1;
+        }
+
+        return total;
+      },
+      {
+        totalExpense: 0,
+        debtFromExpenses: 0,
+        paidBySupplierPayments: 0,
+        remainingDebt: 0,
+        debtSupplierCount: 0,
+      }
+    );
+
+    return res.json({
+      supplierStatements: statements.sort((a, b) => b.remainingDebt - a.remainingDebt),
+      summary,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Tedarikçi cari kayıtları alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+
+
+
+function formatCashMovement(movement) {
+  return {
+    id: movement.id,
+    movementDate: movement.movementDate,
+    direction: movement.direction,
+    title: movement.title,
+    category: movement.category,
+    amount: movement.amount,
+    method: movement.method,
+    note: movement.note,
+    status: movement.status,
+    createdAt: movement.createdAt,
+    updatedAt: movement.updatedAt,
+  };
+}
+
+app.get("/api/cash-movements", authMiddleware, async (req, res) => {
+  try {
+    const movements = await prisma.cashMovement.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+      },
+      orderBy: {
+        movementDate: "desc",
+      },
+    });
+
+    const summary = movements.reduce(
+      (total, movement) => {
+        if (movement.status === "CANCELLED") {
+          total.cancelledCount += 1;
+          return total;
+        }
+
+        const amount = Number(movement.amount || 0);
+
+        if (movement.direction === "IN") {
+          total.inflow += amount;
+        } else {
+          total.outflow += amount;
+        }
+
+        total.net = total.inflow - total.outflow;
+        total.activeCount += 1;
+
+        return total;
+      },
+      {
+        inflow: 0,
+        outflow: 0,
+        net: 0,
+        activeCount: 0,
+        cancelledCount: 0,
+      }
+    );
+
+    return res.json({
+      cashMovements: movements.map(formatCashMovement),
+      summary,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Kasa hareketleri alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/cash-movements", authMiddleware, async (req, res) => {
+  try {
+    const {
+      movementDate,
+      direction,
+      title,
+      category,
+      amount,
+      method,
+      note,
+    } = req.body;
+
+    const numericAmount = Number(amount || 0);
+
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({
+        message: "Açıklama zorunludur.",
+      });
+    }
+
+    if (numericAmount <= 0) {
+      return res.status(400).json({
+        message: "Tutar 0'dan büyük olmalıdır.",
+      });
+    }
+
+    const finalDirection = direction === "OUT" ? "OUT" : "IN";
+
+    const movement = await prisma.cashMovement.create({
+      data: {
+        restaurantId: req.user.restaurantId,
+        movementDate: movementDate ? new Date(movementDate) : new Date(),
+        direction: finalDirection,
+        title: String(title).trim(),
+        category: category || "Genel",
+        amount: numericAmount,
+        method: method || "CASH",
+        note: note || null,
+        status: "ACTIVE",
+      },
+    });
+
+    return res.json({
+      message:
+        finalDirection === "IN"
+          ? "Kasa girişi kaydedildi."
+          : "Kasa çıkışı kaydedildi.",
+      cashMovement: formatCashMovement(movement),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Kasa hareketi kaydedilemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+app.put("/api/cash-movements/:id/cancel", authMiddleware, async (req, res) => {
+  try {
+    const movementId = Number(req.params.id);
+
+    const movement = await prisma.cashMovement.findFirst({
+      where: {
+        id: movementId,
+        restaurantId: req.user.restaurantId,
+      },
+    });
+
+    if (!movement) {
+      return res.status(404).json({
+        message: "Kasa hareketi bulunamadı.",
+      });
+    }
+
+    if (movement.status === "CANCELLED") {
+      return res.status(400).json({
+        message: "Bu kasa hareketi zaten iptal edilmiş.",
+      });
+    }
+
+    const updatedMovement = await prisma.cashMovement.update({
+      where: {
+        id: movement.id,
+      },
+      data: {
+        status: "CANCELLED",
+      },
+    });
+
+    return res.json({
+      message: "Kasa hareketi iptal edildi.",
+      cashMovement: formatCashMovement(updatedMovement),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Kasa hareketi iptal edilemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+
+
+
+function calculateDailySaleTotal(data) {
+  return (
+    Number(data.cashAmount || 0) +
+    Number(data.cardAmount || 0) +
+    Number(data.onlineAmount || 0) +
+    Number(data.yemeksepetiAmount || 0) +
+    Number(data.getirAmount || 0) +
+    Number(data.trendyolAmount || 0) +
+    Number(data.otherAmount || 0)
+  );
+}
+
+function formatDailySale(sale) {
+  return {
+    id: sale.id,
+    saleDate: sale.saleDate,
+    date: sale.saleDate,
+    title: sale.title,
+    cashAmount: sale.cashAmount,
+    cardAmount: sale.cardAmount,
+    onlineAmount: sale.onlineAmount,
+    yemeksepetiAmount: sale.yemeksepetiAmount,
+    getirAmount: sale.getirAmount,
+    trendyolAmount: sale.trendyolAmount,
+    otherAmount: sale.otherAmount,
+    totalAmount: sale.totalAmount,
+    totalRevenue: sale.totalAmount,
+    totalSales: sale.totalAmount,
+    revenue: sale.totalAmount,
+    guestCount: sale.guestCount,
+    orderCount: sale.orderCount,
+    note: sale.note,
+    status: sale.status,
+    createdAt: sale.createdAt,
+    updatedAt: sale.updatedAt,
+  };
+}
+
+app.get("/api/daily-sales", authMiddleware, async (req, res) => {
+  try {
+    const sales = await prisma.dailySale.findMany({
+      where: {
+        restaurantId: req.user.restaurantId,
+      },
+      orderBy: {
+        saleDate: "desc",
+      },
+    });
+
+    const summary = sales.reduce(
+      (total, sale) => {
+        if (sale.status === "CANCELLED") {
+          total.cancelledCount += 1;
+          return total;
+        }
+
+        total.cashAmount += Number(sale.cashAmount || 0);
+        total.cardAmount += Number(sale.cardAmount || 0);
+        total.onlineAmount += Number(sale.onlineAmount || 0);
+        total.yemeksepetiAmount += Number(sale.yemeksepetiAmount || 0);
+        total.getirAmount += Number(sale.getirAmount || 0);
+        total.trendyolAmount += Number(sale.trendyolAmount || 0);
+        total.otherAmount += Number(sale.otherAmount || 0);
+        total.totalAmount += Number(sale.totalAmount || 0);
+        total.guestCount += Number(sale.guestCount || 0);
+        total.orderCount += Number(sale.orderCount || 0);
+        total.activeCount += 1;
+
+        return total;
+      },
+      {
+        cashAmount: 0,
+        cardAmount: 0,
+        onlineAmount: 0,
+        yemeksepetiAmount: 0,
+        getirAmount: 0,
+        trendyolAmount: 0,
+        otherAmount: 0,
+        totalAmount: 0,
+        guestCount: 0,
+        orderCount: 0,
+        activeCount: 0,
+        cancelledCount: 0,
+      }
+    );
+
+    return res.json({
+      dailySales: sales.map(formatDailySale),
+      sales: sales.map(formatDailySale),
+      summary,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Günlük ciro kayıtları alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/daily-sales", authMiddleware, async (req, res) => {
+  try {
+    const {
+      saleDate,
+      title,
+      cashAmount,
+      cardAmount,
+      onlineAmount,
+      yemeksepetiAmount,
+      getirAmount,
+      trendyolAmount,
+      otherAmount,
+      guestCount,
+      orderCount,
+      note,
+    } = req.body;
+
+    const payload = {
+      cashAmount: Number(cashAmount || 0),
+      cardAmount: Number(cardAmount || 0),
+      onlineAmount: Number(onlineAmount || 0),
+      yemeksepetiAmount: Number(yemeksepetiAmount || 0),
+      getirAmount: Number(getirAmount || 0),
+      trendyolAmount: Number(trendyolAmount || 0),
+      otherAmount: Number(otherAmount || 0),
+    };
+
+    const totalAmount = calculateDailySaleTotal(payload);
+
+    if (totalAmount <= 0) {
+      return res.status(400).json({
+        message: "Günlük ciro toplamı 0'dan büyük olmalıdır.",
+      });
+    }
+
+    const sale = await prisma.dailySale.create({
+      data: {
+        restaurantId: req.user.restaurantId,
+        saleDate: saleDate ? new Date(saleDate) : new Date(),
+        title: title || "Günlük Ciro",
+        cashAmount: payload.cashAmount,
+        cardAmount: payload.cardAmount,
+        onlineAmount: payload.onlineAmount,
+        yemeksepetiAmount: payload.yemeksepetiAmount,
+        getirAmount: payload.getirAmount,
+        trendyolAmount: payload.trendyolAmount,
+        otherAmount: payload.otherAmount,
+        totalAmount,
+        guestCount: Number(guestCount || 0),
+        orderCount: Number(orderCount || 0),
+        note: note || null,
+        status: "ACTIVE",
+      },
+    });
+
+    return res.json({
+      message: "Günlük ciro kaydı oluşturuldu.",
+      dailySale: formatDailySale(sale),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Günlük ciro kaydı oluşturulamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.put("/api/daily-sales/:id/cancel", authMiddleware, async (req, res) => {
+  try {
+    const saleId = Number(req.params.id);
+
+    const sale = await prisma.dailySale.findFirst({
+      where: {
+        id: saleId,
+        restaurantId: req.user.restaurantId,
+      },
+    });
+
+    if (!sale) {
+      return res.status(404).json({
+        message: "Günlük ciro kaydı bulunamadı.",
+      });
+    }
+
+    if (sale.status === "CANCELLED") {
+      return res.status(400).json({
+        message: "Bu günlük ciro kaydı zaten iptal edilmiş.",
+      });
+    }
+
+    const updatedSale = await prisma.dailySale.update({
+      where: {
+        id: sale.id,
+      },
+      data: {
+        status: "CANCELLED",
+      },
+    });
+
+    return res.json({
+      message: "Günlük ciro kaydı iptal edildi.",
+      dailySale: formatDailySale(updatedSale),
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      message: "Günlük ciro kaydı iptal edilemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+/*
+  Uyum endpointleri:
+  Nakit Akışı ve Kâr Zarar ekranları /api/sales veya /api/daily-reports okuyorsa
+  aynı günlük ciro verisini bu endpointlerden de döndürüyoruz.
+*/
+
+if (!global.__handsOffSalesCompatibilityRoutesAdded) {
+  global.__handsOffSalesCompatibilityRoutesAdded = true;
+
+  app.get("/api/sales", authMiddleware, async (req, res) => {
+    try {
+      const sales = await prisma.dailySale.findMany({
+        where: {
+          restaurantId: req.user.restaurantId,
+        },
+        orderBy: {
+          saleDate: "desc",
+        },
+      });
+
+      return res.json({
+        sales: sales.map(formatDailySale),
+      });
+    } catch (error) {
+      console.error(error);
+
+      return res.status(500).json({
+        message: "Satış kayıtları alınamadı.",
+        detail: error.message,
+      });
+    }
+  });
+
+  app.get("/api/daily-reports", authMiddleware, async (req, res) => {
+    try {
+      const reports = await prisma.dailySale.findMany({
+        where: {
+          restaurantId: req.user.restaurantId,
+        },
+        orderBy: {
+          saleDate: "desc",
+        },
+      });
+
+      return res.json({
+        dailyReports: reports.map(formatDailySale),
+      });
+    } catch (error) {
+      console.error(error);
+
+      return res.status(500).json({
+        message: "Günlük rapor kayıtları alınamadı.",
+        detail: error.message,
+      });
+    }
+  });
+}
+
+
 app.listen(PORT, () => {
   console.log(`HandsOff backend calisiyor: http://localhost:${PORT}`);
 });

@@ -7,6 +7,69 @@ import SuppliersPage from "./SuppliersPage";
 import PurchaseOrdersPage from "./PurchaseOrdersPage";
 import InventoryPage from "./InventoryPage";
 import StockCountPage from "./StockCountPage";
+import WastePage from "./WastePage";
+import SupplierStatementPage from "./SupplierStatementPage";
+import CashFlowPage from "./CashFlowPage";
+import DailySalesPage from "./DailySalesPage";
+
+function isDailySalesPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("ciro") ||
+    page.includes("gelir girişi") ||
+    page.includes("gelir girisi") ||
+    page.includes("günlük gelir") ||
+    page.includes("gunluk gelir") ||
+    page.includes("günlük satış") ||
+    page.includes("gunluk satis") ||
+    page.includes("daily sales") ||
+    page.includes("revenue")
+  );
+}
+
+
+function isCashFlowPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("nakit") ||
+    page.includes("kasa") ||
+    page.includes("banka") ||
+    page.includes("cash") ||
+    page.includes("cash flow")
+  );
+}
+
+
+function isSupplierStatementPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("cari") ||
+    page.includes("borç") ||
+    page.includes("borc") ||
+    page.includes("tedarikçi ödeme") ||
+    page.includes("tedarikci odeme") ||
+    page.includes("supplier statement") ||
+    page.includes("supplier payment")
+  );
+}
+
+
+function isWastePage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("zayi") ||
+    page.includes("kırılma") ||
+    page.includes("kirilma") ||
+    page.includes("fire") ||
+    page.includes("waste") ||
+    page.includes("breakage")
+  );
+}
+
 
 function isStockCountPage(activePage) {
   const page = String(activePage || "").toLocaleLowerCase("tr-TR");
@@ -1823,7 +1886,15 @@ return (
           isPurchaseOrdersPage(activePage) ? (
           <PurchaseOrdersPage user={user} />
         ) : (
-          isStockCountPage(activePage) ? (
+          isDailySalesPage(activePage) ? (
+          <DailySalesPage user={user} />
+        ) : isCashFlowPage(activePage) ? (
+          <CashFlowPage user={user} />
+        ) : isSupplierStatementPage(activePage) ? (
+          <SupplierStatementPage user={user} />
+        ) : isWastePage(activePage) ? (
+          <WastePage user={user} />
+        ) : isStockCountPage(activePage) ? (
           <StockCountPage user={user} />
         ) : isInventoryPage(activePage) ? (
           <InventoryPage user={user} />

@@ -383,6 +383,21 @@ export default function SuppliersPage({ user }) {
           <div>
             <p className="eyebrow">HandsOff / {user.restaurantName}</p>
             <h1>Tedarikçiler</h1>
+
+            <button
+              className="hero-button"
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent("handsoff:navigate", {
+                    detail: "Tedarikçi Cari / Borç Takibi",
+                  })
+                )
+              }
+              style={{ marginTop: 12 }}
+            >
+              Tedarikçi Cari / Borç Takibi
+            </button>
             <p>
               Restoranın çalıştığı tedarikçileri, vergi bilgilerini, IBAN
               bilgilerini, iletişim kişilerini ve gider/borç durumlarını buradan
