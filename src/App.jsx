@@ -11,6 +11,55 @@ import WastePage from "./WastePage";
 import SupplierStatementPage from "./SupplierStatementPage";
 import CashFlowPage from "./CashFlowPage";
 import DailySalesPage from "./DailySalesPage";
+import ExecutiveDashboardPage from "./ExecutiveDashboardPage";
+import BackupExportPage from "./BackupExportPage";
+import SystemHealthPage from "./SystemHealthPage";
+
+function isSystemHealthPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("sağlık") ||
+    page.includes("saglik") ||
+    page.includes("sistem kontrol") ||
+    page.includes("kontrol") ||
+    page.includes("test") ||
+    page.includes("health") ||
+    page.includes("diagnostic") ||
+    page.includes("diagnostics")
+  );
+}
+
+
+function isBackupExportPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("yedek") ||
+    page.includes("backup") ||
+    page.includes("dışa aktar") ||
+    page.includes("disa aktar") ||
+    page.includes("veri dışa") ||
+    page.includes("veri disa") ||
+    page.includes("export")
+  );
+}
+
+
+function isExecutiveDashboardPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("dashboard") ||
+    page.includes("yönetim özeti") ||
+    page.includes("yonetim ozeti") ||
+    page.includes("özet") ||
+    page.includes("ozet") ||
+    page.includes("ana sayfa") ||
+    page.includes("home")
+  );
+}
+
 
 function isDailySalesPage(activePage) {
   const page = String(activePage || "").toLocaleLowerCase("tr-TR");
@@ -1886,7 +1935,13 @@ return (
           isPurchaseOrdersPage(activePage) ? (
           <PurchaseOrdersPage user={user} />
         ) : (
-          isDailySalesPage(activePage) ? (
+          isSystemHealthPage(activePage) ? (
+          <SystemHealthPage user={user} />
+        ) : isBackupExportPage(activePage) ? (
+          <BackupExportPage user={user} />
+        ) : isExecutiveDashboardPage(activePage) ? (
+          <ExecutiveDashboardPage user={user} />
+        ) : isDailySalesPage(activePage) ? (
           <DailySalesPage user={user} />
         ) : isCashFlowPage(activePage) ? (
           <CashFlowPage user={user} />
