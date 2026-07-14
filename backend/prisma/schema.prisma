@@ -8,6 +8,7 @@ datasource db {
 }
 
 model Restaurant {
+  restaurantSetting RestaurantSetting?
   id        Int      @id @default(autoincrement())
   name      String
   slug      String   @unique
@@ -384,3 +385,27 @@ model DailySale {
   restaurantId       Int
   restaurant         Restaurant @relation(fields: [restaurantId], references: [id])
 }
+
+model RestaurantSetting {
+  id                     Int      @id @default(autoincrement())
+  restaurantId           Int   @unique
+  restaurant             Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  restaurantName         String?
+  phone                  String?
+  email                  String?
+  address                String?
+  taxOffice              String?
+  taxNumber              String?
+  mersisNo               String?
+  currency               String   @default("TRY")
+
+  minStockWarningEnabled Boolean  @default(true)
+  minStockWarningLevel   Float?
+  backupNote             String?
+  usageNotes             String?
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+

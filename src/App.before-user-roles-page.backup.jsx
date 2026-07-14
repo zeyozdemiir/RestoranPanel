@@ -14,22 +14,6 @@ import DailySalesPage from "./DailySalesPage";
 import ExecutiveDashboardPage from "./ExecutiveDashboardPage";
 import BackupExportPage from "./BackupExportPage";
 import SystemHealthPage from "./SystemHealthPage";
-import UserRolesPage from "./UserRolesPage";
-
-function isUserRolesPage(activePage) {
-  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
-
-  return (
-    page.includes("kullanıcı rol") ||
-    page.includes("kullanici rol") ||
-    page.includes("yetki") ||
-    page.includes("yetkilendirme") ||
-    page.includes("roller") ||
-    page.includes("roles") ||
-    page.includes("permission")
-  );
-}
-
 
 function isSystemHealthPage(activePage) {
   const page = String(activePage || "").toLocaleLowerCase("tr-TR");
@@ -1991,11 +1975,7 @@ return (
         ) : isInventoryPage(activePage) ? (
           <InventoryPage user={user} />
         ) : (
-          isUserRolesPage(activePage) ? (
-          <UserRolesPage user={user} />
-        ) : (
           <ModulePage title={activePage} />
-        )
         )
         )
         )

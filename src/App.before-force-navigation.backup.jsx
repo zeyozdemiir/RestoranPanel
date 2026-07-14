@@ -14,22 +14,6 @@ import DailySalesPage from "./DailySalesPage";
 import ExecutiveDashboardPage from "./ExecutiveDashboardPage";
 import BackupExportPage from "./BackupExportPage";
 import SystemHealthPage from "./SystemHealthPage";
-import UserRolesPage from "./UserRolesPage";
-
-function isUserRolesPage(activePage) {
-  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
-
-  return (
-    page.includes("kullanıcı rol") ||
-    page.includes("kullanici rol") ||
-    page.includes("yetki") ||
-    page.includes("yetkilendirme") ||
-    page.includes("roller") ||
-    page.includes("roles") ||
-    page.includes("permission")
-  );
-}
-
 
 function isSystemHealthPage(activePage) {
   const page = String(activePage || "").toLocaleLowerCase("tr-TR");
@@ -1867,27 +1851,6 @@ function ModulePage({ title }) {
 function Panel({ user, onLogout }) {
   const [activePage, setActivePage] = useState("Dashboard");
 
-  // HANDSOFF_FORCE_NAVIGATION_LISTENER
-  useEffect(() => {
-    function handleHandsOffNavigation(event) {
-      if (event && event.detail) {
-        setActivePage(event.detail);
-      }
-    }
-
-    window.addEventListener("handsoff:navigate", handleHandsOffNavigation);
-
-    const lastRequestedPage = localStorage.getItem("handsoff_last_requested_page");
-
-    if (lastRequestedPage) {
-      setActivePage(lastRequestedPage);
-    }
-
-    return () => {
-      window.removeEventListener("handsoff:navigate", handleHandsOffNavigation);
-    };
-  }, []);
-
   
 
   useEffect(() => {
@@ -1991,11 +1954,7 @@ return (
         ) : isInventoryPage(activePage) ? (
           <InventoryPage user={user} />
         ) : (
-          isUserRolesPage(activePage) ? (
-          <UserRolesPage user={user} />
-        ) : (
           <ModulePage title={activePage} />
-        )
         )
         )
         )
