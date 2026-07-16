@@ -11,7 +11,7 @@ import WastePage from "./WastePage";
 import SupplierStatementPage from "./SupplierStatementPage";
 import CashFlowPage from "./CashFlowPage";
 import DailySalesPage from "./DailySalesPage";
-import ExecutiveDashboardPage from "./ExecutiveDashboardPage";
+import ExecutiveDashboardPage from "./ApprovedDashboardPage";
 import BackupExportPage from "./BackupExportPage";
 import SystemHealthPage from "./SystemHealthPage";
 import UserRolesPage from "./UserRolesPage";
@@ -268,7 +268,7 @@ const menuGroups = [
   {
     title: "Her Gün",
     items: [
-      "Dashboard",
+      "Yönetim Özeti",
       "Günlük Operasyon",
       "Rezervasyonlar",
       "Masa Yönetimi",
@@ -1949,7 +1949,7 @@ function ModulePage({ title }) {
 }
 
 function Panel({ user, onLogout }) {
-  const [activePage, setActivePage] = useState("Dashboard");
+  const [activePage, setActivePage] = useState("Yönetim Özeti");
 
   // HANDSOFF_FORCE_NAVIGATION_LISTENER
   useEffect(() => {
@@ -2034,8 +2034,8 @@ return (
       <main className="main">
         <Topbar activePage={activePage} user={user} onLogout={onLogout} />
 
-        {activePage === "Dashboard" ? (
-          <Dashboard user={user} />
+        {isExecutiveDashboardPage(activePage) ? (
+          <ExecutiveDashboardPage user={user} />
         ) : (
           activePage === "\u0047\u00fcnl\u00fck Operasyon" ? (
           <DailyReportPage user={user} />
