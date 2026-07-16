@@ -120,45 +120,6 @@ function statusBadge(status) {
   return { text, tone: "warning" };
 }
 
-
-function getAuthToken() {
-  const directToken =
-    localStorage.getItem("handsoff_token") ||
-    localStorage.getItem("token") ||
-    localStorage.getItem("accessToken");
-
-  if (directToken) return directToken;
-
-  try {
-    const session = JSON.parse(localStorage.getItem("handsoff_session") || "{}");
-
-    return (
-      session.token ||
-      session.accessToken ||
-      session.jwt ||
-      session.authToken ||
-      session?.user?.token ||
-      ""
-    );
-  } catch {
-    return "";
-  }
-}
-
-function getAuthHeaders() {
-  const token = getAuthToken();
-
-  const headers = {
-    "Content-Type": "application/json",
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  return headers;
-}
-
 function ExecutiveDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState({
@@ -180,18 +141,10 @@ function ExecutiveDashboardPage() {
       setLoading(true);
       setErrors([]);
 
-      const authHeaders = getAuthHeaders();
-
-      if (!authHeaders.Authorization) {
-        setErrors(["Oturum token bulunamadı. Lütfen çıkış yapıp tekrar giriş yap."]);
-        setLoading(false);
-        return;
-      }
-
       const entries = await Promise.all(
         Object.entries(endpoints).map(async ([key, path]) => {
           try {
-            const response = await fetch(`${API_BASE_URL}${path}`, { headers: authHeaders });
+            const response = await fetch(`${API_BASE_URL}${path}`);
 
             if (!response.ok) {
               throw new Error(`${path} ${response.status}`);
