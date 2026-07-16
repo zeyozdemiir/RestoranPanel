@@ -1,0 +1,411 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Restaurant {
+  restaurantSetting RestaurantSetting?
+  id        Int      @id @default(autoincrement())
+  name      String
+  slug      String   @unique
+  plan      String   @default("Demo")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users                User[]
+  dashboardStats       DashboardStat[]
+  dashboardRevenueBars DashboardRevenueBar[]
+  dashboardActions     DashboardAction[]
+  dailyReports         DailyReport[]
+  uploadedDocuments    UploadedDocument[]
+  expenses             Expense[]
+  suppliers            Supplier[]
+  purchaseOrders       PurchaseOrder[]
+  inventoryItems       InventoryItem[]
+  stockMovements       StockMovement[]
+  stockCounts          StockCount[]
+  wasteRecords         WasteRecord[]
+  supplierPayments    SupplierPayment[]
+  cashMovements       CashMovement[]
+  dailySales          DailySale[]
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("Restaurant Admin")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  uploadedDocuments UploadedDocument[]
+}
+
+model DashboardStat {
+  id        Int      @id @default(autoincrement())
+  title     String
+  value     String
+  note      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+model DashboardRevenueBar {
+  id        Int      @id @default(autoincrement())
+  label     String
+  value     String
+  height    String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+model DashboardAction {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String
+  status      String
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+model DailyReport {
+  id               Int      @id @default(autoincrement())
+  reportDate       DateTime
+  revenue          Float    @default(0)
+  reservationCount Int      @default(0)
+  openTaskCount    Int      @default(0)
+  cashDifference   Float    @default(0)
+  note             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@unique([restaurantId, reportDate])
+}
+
+model UploadedDocument {
+  id           Int      @id @default(autoincrement())
+  originalName String
+  storedName   String
+  mimeType     String
+  sizeBytes    Int
+  path         String
+
+  documentType String   @default("ADISYON_REPORT")
+  status       String   @default("UPLOADED")
+
+  aiRead       Boolean  @default(false)
+  processed    Boolean  @default(false)
+
+  extractedData String?
+  note          String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  uploadedByUserId Int
+  uploadedByUser   User @relation(fields: [uploadedByUserId], references: [id])
+
+  expenses Expense[]
+}
+
+model Expense {
+  id Int @id @default(autoincrement())
+
+  supplierName String @default("AI okuma bekliyor")
+  invoiceNo    String?
+  invoiceDate  DateTime?
+
+  category      String @default("Fatura")
+  description   String?
+  netAmount     Float  @default(0)
+  taxAmount     Float  @default(0)
+  totalAmount   Float  @default(0)
+  currency      String @default("TRY")
+
+  paymentStatus String @default("UNPAID")
+  status        String @default("DRAFT")
+  source        String @default("UPLOAD")
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  uploadedDocumentId Int?
+  uploadedDocument   UploadedDocument? @relation(fields: [uploadedDocumentId], references: [id])
+}
+
+model Supplier {
+  id          Int      @id @default(autoincrement())
+  name        String
+  taxNumber   String?
+  iban        String?
+  phone       String?
+  email       String?
+  address     String?
+  category    String   @default("Genel")
+  contactName String?
+  note        String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  purchaseOrders       PurchaseOrder[]
+  supplierPayments      SupplierPayment[]
+}
+
+
+model PurchaseOrder {
+  id             Int      @id @default(autoincrement())
+  supplierId     Int?
+  supplier       Supplier? @relation(fields: [supplierId], references: [id])
+  supplierName   String
+  orderNo        String?
+  orderDate      DateTime @default(now())
+  category       String   @default("Stok / Satın Alma")
+  itemName       String
+  quantity       Float    @default(1)
+  unit           String   @default("adet")
+  unitPrice      Float    @default(0)
+  totalAmount    Float    @default(0)
+  paymentStatus  String   @default("UNPAID")
+  status         String   @default("DRAFT")
+  expenseCreated Boolean  @default(false)
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  restaurantId   Int
+  restaurant     Restaurant @relation(fields: [restaurantId], references: [id])
+  stockMovementCreated Boolean  @default(false)
+  stockMovements       StockMovement[]
+}
+
+
+model InventoryItem {
+  id           Int      @id @default(autoincrement())
+  name         String
+  category     String   @default("Genel")
+  unit         String   @default("adet")
+  currentStock Float    @default(0)
+  minStock     Float    @default(0)
+  isActive     Boolean  @default(true)
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  stockMovements StockMovement[]
+
+  @@unique([restaurantId, name])
+  stockCountLines     StockCountLine[]
+  wasteRecords         WasteRecord[]
+}
+
+
+model StockMovement {
+  id              Int      @id @default(autoincrement())
+  type            String   @default("PURCHASE_IN")
+  movementDate    DateTime @default(now())
+  quantity        Float    @default(0)
+  unit            String   @default("adet")
+  unitPrice       Float    @default(0)
+  totalAmount     Float    @default(0)
+  source          String   @default("PURCHASE_ORDER")
+  note            String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  restaurantId    Int
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id])
+
+  inventoryItemId Int
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  purchaseOrderId Int?
+  purchaseOrder   PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+}
+
+
+model StockCount {
+  id           Int      @id @default(autoincrement())
+  countNo      String
+  countDate    DateTime @default(now())
+  status       String   @default("DRAFT")
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  lines StockCountLine[]
+
+  @@unique([restaurantId, countNo])
+}
+
+
+model StockCountLine {
+  id           Int      @id @default(autoincrement())
+  systemStock  Float    @default(0)
+  countedStock Float?
+  difference   Float    @default(0)
+  unit         String   @default("adet")
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  stockCountId Int
+  stockCount   StockCount @relation(fields: [stockCountId], references: [id])
+
+  inventoryItemId Int
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@unique([stockCountId, inventoryItemId])
+}
+
+
+model WasteRecord {
+  id                 Int      @id @default(autoincrement())
+  type               String   @default("WASTE")
+  recordDate         DateTime @default(now())
+  itemName           String
+  category           String   @default("Genel")
+  quantity           Float    @default(0)
+  unit               String   @default("adet")
+  estimatedUnitPrice Float    @default(0)
+  estimatedCost      Float    @default(0)
+  reason             String?
+  responsible        String?
+  note               String?
+  stockDeducted      Boolean  @default(false)
+  status             String   @default("RECORDED")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  restaurantId       Int
+  restaurant         Restaurant @relation(fields: [restaurantId], references: [id])
+
+  inventoryItemId    Int?
+  inventoryItem      InventoryItem? @relation(fields: [inventoryItemId], references: [id])
+}
+
+
+model SupplierPayment {
+  id           Int      @id @default(autoincrement())
+  paymentDate  DateTime @default(now())
+  supplierName String
+  amount       Float    @default(0)
+  method       String   @default("BANK_TRANSFER")
+  note         String?
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  supplierId   Int?
+  supplier     Supplier? @relation(fields: [supplierId], references: [id])
+}
+
+
+model CashMovement {
+  id          Int      @id @default(autoincrement())
+  movementDate DateTime @default(now())
+  direction   String   @default("IN")
+  title       String
+  category    String   @default("Genel")
+  amount      Float    @default(0)
+  method      String   @default("CASH")
+  note        String?
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  restaurantId Int
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+
+model DailySale {
+  id                 Int      @id @default(autoincrement())
+  saleDate           DateTime @default(now())
+  title              String   @default("Günlük Ciro")
+  cashAmount         Float    @default(0)
+  cardAmount         Float    @default(0)
+  onlineAmount       Float    @default(0)
+  yemeksepetiAmount  Float    @default(0)
+  getirAmount        Float    @default(0)
+  trendyolAmount     Float    @default(0)
+  otherAmount        Float    @default(0)
+  totalAmount        Float    @default(0)
+  guestCount         Int      @default(0)
+  orderCount         Int      @default(0)
+  note               String?
+  status             String   @default("ACTIVE")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  restaurantId       Int
+  restaurant         Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+model RestaurantSetting {
+  id                     Int      @id @default(autoincrement())
+  restaurantId           Int   @unique
+  restaurant             Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  restaurantName         String?
+  phone                  String?
+  email                  String?
+  address                String?
+  taxOffice              String?
+  taxNumber              String?
+  mersisNo               String?
+  currency               String   @default("TRY")
+
+  minStockWarningEnabled Boolean  @default(true)
+  minStockWarningLevel   Float?
+  backupNote             String?
+  usageNotes             String?
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
