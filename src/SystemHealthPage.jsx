@@ -1,450 +1,387 @@
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { API_BASE_URL } from "./apiConfig";
-﻿import { useEffect, useMemo, useState } from "react";
 
-const checks = [
-  {
-    key: "health",
-    title: "Backend Sağlık",
-    url: API_BASE_URL + "/api/health",
-    rootKey: null,
-    auth: false,
-  },
-  {
-    key: "dailySales",
-    title: "Günlük Ciro",
-    url: API_BASE_URL + "/api/daily-sales",
-    rootKey: "dailySales",
-    auth: true,
-  },
-  {
-    key: "expenses",
-    title: "Gider Yönetimi",
-    url: API_BASE_URL + "/api/expenses",
-    rootKey: "expenses",
-    auth: true,
-  },
-  {
-    key: "suppliers",
-    title: "Tedarikçiler",
-    url: API_BASE_URL + "/api/suppliers",
-    rootKey: "suppliers",
-    auth: true,
-  },
-  {
-    key: "supplierStatements",
-    title: "Tedarikçi Cari",
-    url: API_BASE_URL + "/api/supplier-statements",
-    rootKey: "supplierStatements",
-    auth: true,
-  },
-  {
-    key: "supplierPayments",
-    title: "Tedarikçi Ödemeleri",
-    url: API_BASE_URL + "/api/supplier-payments",
-    rootKey: "supplierPayments",
-    auth: true,
-  },
-  {
-    key: "purchaseOrders",
-    title: "Satın Alma Talepleri",
-    url: API_BASE_URL + "/api/purchase-orders",
-    rootKey: "purchaseOrders",
-    auth: true,
-  },
-  {
-    key: "inventoryItems",
-    title: "Stok Kartları",
-    url: API_BASE_URL + "/api/inventory-items",
-    rootKey: "inventoryItems",
-    auth: true,
-  },
-  {
-    key: "stockMovements",
-    title: "Stok Hareketleri",
-    url: API_BASE_URL + "/api/stock-movements",
-    rootKey: "stockMovements",
-    auth: true,
-  },
-  {
-    key: "stockCounts",
-    title: "Stok Sayımları",
-    url: API_BASE_URL + "/api/stock-counts",
-    rootKey: "stockCounts",
-    auth: true,
-  },
-  {
-    key: "wasteRecords",
-    title: "Zayi / Kırılma",
-    url: API_BASE_URL + "/api/waste-records",
-    rootKey: "wasteRecords",
-    auth: true,
-  },
-  {
-    key: "cashMovements",
-    title: "Manuel Kasa Hareketleri",
-    url: API_BASE_URL + "/api/cash-movements",
-    rootKey: "cashMovements",
-    auth: true,
-  },
-  {
-    key: "backup",
-    title: "Veri Yedekleme",
-    url: API_BASE_URL + "/api/backup/export",
-    rootKey: null,
-    auth: true,
-  },
-];
+function getTokenInfo() {
+  const token =
+    localStorage.getItem("handsoff_token") ||
+    localStorage.getItem("token") ||
+    localStorage.getItem("accessToken");
 
-function formatDateTime(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleString("tr-TR");
+  const session = localStorage.getItem("handsoff_session");
+
+  return {
+    hasToken: Boolean(token),
+    tokenPreview: token ? `${token.slice(0, 8)}...${token.slice(-6)}` : "Token yok",
+    hasSession: Boolean(session),
+    sessionSize: session ? `${session.length} karakter` : "Session yok",
+  };
 }
 
-function getCountFromResponse(data, rootKey) {
-  if (!data) {
-    return 0;
-  }
+function StatusBadge({ status }) {
+  const config = {
+    ok: {
+      text: "Çalışıyor",
+      style: styles.badgeOk,
+    },
+    warning: {
+      text: "Kontrol Gerekli",
+      style: styles.badgeWarning,
+    },
+    error: {
+      text: "Sorun Var",
+      style: styles.badgeError,
+    },
+    loading: {
+      text: "Kontrol Ediliyor",
+      style: styles.badgeLoading,
+    },
+  };
 
-  if (!rootKey) {
-    if (data.counts && typeof data.counts === "object") {
-      return Object.values(data.counts).reduce((total, value) => {
-        return total + Number(value || 0);
-      }, 0);
-    }
+  const item = config[status] || config.warning;
 
-    return 1;
-  }
-
-  if (Array.isArray(data)) {
-    return data.length;
-  }
-
-  if (Array.isArray(data[rootKey])) {
-    return data[rootKey].length;
-  }
-
-  return 0;
+  return <span style={{ ...styles.badge, ...item.style }}>{item.text}</span>;
 }
 
-export default function SystemHealthPage({ user }) {
-  const [results, setResults] = useState([]);
-  const [running, setRunning] = useState(false);
-  const [lastRunAt, setLastRunAt] = useState(null);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+function SystemHealthPage() {
+  const [backendStatus, setBackendStatus] = useState("loading");
+  const [backendResponse, setBackendResponse] = useState(null);
+  const [backendError, setBackendError] = useState("");
+  const [lastChecked, setLastChecked] = useState("");
 
-  useEffect(() => {
-    runChecks();
-  }, []);
+  const tokenInfo = useMemo(() => getTokenInfo(), []);
 
-  async function runSingleCheck(check) {
-    const start = performance.now();
+  async function checkBackend() {
+    setBackendStatus("loading");
+    setBackendError("");
+    setBackendResponse(null);
 
     try {
-      const token = localStorage.getItem("handsoff_token");
-
-      const headers = {};
-
-      if (check.auth) {
-        headers.Authorization = "Bearer " + token;
-      }
-
-      const response = await fetch(check.url, {
-        headers,
-      });
-
-      let data = null;
-
-      try {
-        data = await response.json();
-      } catch {
-        data = null;
-      }
-
-      const durationMs = Math.round(performance.now() - start);
+      const response = await fetch(`${API_BASE_URL}/api/health`);
 
       if (!response.ok) {
-        return {
-          ...check,
-          ok: false,
-          status: response.status,
-          durationMs,
-          count: 0,
-          message:
-            data?.message ||
-            data?.detail ||
-            "API cevap verdi ama başarılı değil.",
-          checkedAt: new Date().toISOString(),
-        };
+        throw new Error(`HTTP ${response.status}`);
       }
 
-      return {
-        ...check,
-        ok: true,
-        status: response.status,
-        durationMs,
-        count: getCountFromResponse(data, check.rootKey),
-        message: "Çalışıyor",
-        checkedAt: new Date().toISOString(),
-      };
+      const payload = await response.json();
+
+      setBackendResponse(payload);
+      setBackendStatus("ok");
+      setLastChecked(new Date().toLocaleString("tr-TR"));
     } catch (error) {
-      const durationMs = Math.round(performance.now() - start);
-
-      return {
-        ...check,
-        ok: false,
-        status: "-",
-        durationMs,
-        count: 0,
-        message: "Bağlantı kurulamadı: " + error.message,
-        checkedAt: new Date().toISOString(),
-      };
+      setBackendError(error.message || "Backend bağlantısı kurulamadı.");
+      setBackendStatus("error");
+      setLastChecked(new Date().toLocaleString("tr-TR"));
     }
   }
 
-  async function runChecks() {
-    try {
-      setRunning(true);
-      setError("");
-      setMessage("");
+  useEffect(() => {
+    checkBackend();
+  }, []);
 
-      const checkResults = [];
-
-      for (const check of checks) {
-        const result = await runSingleCheck(check);
-        checkResults.push(result);
-        setResults([...checkResults]);
-      }
-
-      setLastRunAt(new Date().toISOString());
-      setMessage("Sistem kontrolü tamamlandı.");
-    } catch {
-      setError("Sistem kontrolü çalıştırılamadı.");
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  const summary = useMemo(() => {
-    const okCount = results.filter((result) => result.ok).length;
-    const failCount = results.filter((result) => !result.ok).length;
-    const totalRecords = results.reduce((total, result) => {
-      return total + Number(result.count || 0);
-    }, 0);
-
-    const slowCount = results.filter((result) => {
-      return result.ok && Number(result.durationMs || 0) > 1000;
-    }).length;
-
-    return {
-      okCount,
-      failCount,
-      totalRecords,
-      slowCount,
-      totalChecks: checks.length,
-    };
-  }, [results]);
-
-  const failedResults = results.filter((result) => !result.ok);
-  const workingResults = results.filter((result) => result.ok);
+  const checks = [
+    {
+      title: "Backend API",
+      value: API_BASE_URL,
+      status: backendStatus,
+      note:
+        backendStatus === "ok"
+          ? "Backend sağlık kontrolünden cevap alındı."
+          : "Backend terminali açık mı ve 4000 portunda mı kontrol et.",
+    },
+    {
+      title: "Frontend",
+      value: window.location.origin,
+      status: "ok",
+      note: "Uygulama tarayıcıda çalışıyor.",
+    },
+    {
+      title: "Oturum Token",
+      value: tokenInfo.tokenPreview,
+      status: tokenInfo.hasToken ? "ok" : "warning",
+      note: tokenInfo.hasToken
+        ? "Giriş tokenı tarayıcıda mevcut."
+        : "Giriş yapılmadıysa API istekleri 401 dönebilir.",
+    },
+    {
+      title: "Session Kaydı",
+      value: tokenInfo.sessionSize,
+      status: tokenInfo.hasSession ? "ok" : "warning",
+      note: tokenInfo.hasSession
+        ? "Oturum bilgisi localStorage içinde mevcut."
+        : "Session kaydı bulunamadı.",
+    },
+  ];
 
   return (
-    <div className="page">
-      <div className="hero">
-        <div className="hero-content">
-          <div>
-            <p className="eyebrow">HandsOff / {user.restaurantName}</p>
-
-            <h1>Sistem Sağlık Kontrolü</h1>
-
-            <p>
-              Backend, finans, stok, tedarikçi, yedekleme ve operasyon
-              endpointlerinin çalışıp çalışmadığını tek ekranda kontrol eder.
-            </p>
-          </div>
-
-          <button
-            className="hero-button"
-            type="button"
-            onClick={runChecks}
-            disabled={running}
-          >
-            {running ? "Kontrol Ediliyor..." : "Sistemi Kontrol Et"}
-          </button>
-        </div>
-      </div>
-
-      {message && (
-        <div
-          className="error-box"
-          style={{
-            color: "#166534",
-            background: "#f0fdf4",
-            borderColor: "#bbf7d0",
-          }}
-        >
-          {message}
-        </div>
-      )}
-
-      {error && <div className="error-box">{error}</div>}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-          gap: 18,
-        }}
-      >
-        <div className="stat-card">
-          <p>Çalışan Modül</p>
-          <h3>{summary.okCount}</h3>
-          <span>{summary.totalChecks} kontrol içinde</span>
+    <main style={styles.page}>
+      <section style={styles.hero}>
+        <div>
+          <p style={styles.eyebrow}>HandsOff Sistem Kontrolü</p>
+          <h1 style={styles.title}>Sistem Sağlık Kontrolü</h1>
+          <p style={styles.subtitle}>
+            Backend bağlantısı, frontend adresi, API ayarı ve oturum durumunu tek ekranda kontrol edin.
+          </p>
         </div>
 
-        <div className="stat-card">
-          <p>Hatalı Modül</p>
-          <h3>{summary.failCount}</h3>
-          <span>{failedResults.length > 0 ? "Müdahale gerekli" : "Sorun yok"}</span>
+        <div style={styles.heroCard}>
+          <span style={styles.heroLabel}>Genel Durum</span>
+          <StatusBadge status={backendStatus} />
+          <small style={styles.heroNote}>
+            Son kontrol: {lastChecked || "Henüz kontrol edilmedi"}
+          </small>
         </div>
+      </section>
 
-        <div className="stat-card">
-          <p>Okunan Kayıt</p>
-          <h3>{summary.totalRecords}</h3>
-          <span>Toplam veri satırı</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Son Kontrol</p>
-          <h3>{lastRunAt ? "Yapıldı" : "-"}</h3>
-          <span>{formatDateTime(lastRunAt)}</span>
-        </div>
-      </div>
-
-      {failedResults.length > 0 && (
-        <div className="panel">
-          <div className="panel-head">
-            <div>
-              <h2>Acil Bakılacak Hatalar</h2>
-
-              <p className="panel-sub">
-                Bu modüller backend’den sağlıklı cevap alamadı.
-              </p>
+      <section style={styles.grid}>
+        {checks.map((check) => (
+          <article key={check.title} style={styles.card}>
+            <div style={styles.cardHeader}>
+              <h2 style={styles.cardTitle}>{check.title}</h2>
+              <StatusBadge status={check.status} />
             </div>
 
-            <span className="mini-pill">{failedResults.length} hata</span>
+            <strong style={styles.cardValue}>{check.value}</strong>
+            <p style={styles.cardNote}>{check.note}</p>
+          </article>
+        ))}
+      </section>
+
+      <section style={styles.panelGrid}>
+        <article style={styles.panel}>
+          <div style={styles.panelHeader}>
+            <div>
+              <h2 style={styles.panelTitle}>Backend Cevabı</h2>
+              <p style={styles.panelText}>/api/health endpointinden alınan cevap.</p>
+            </div>
+
+            <button type="button" onClick={checkBackend} style={styles.button}>
+              Tekrar Kontrol Et
+            </button>
           </div>
 
-          <table className="module-table">
-            <thead>
-              <tr>
-                <th>Modül</th>
-                <th>HTTP</th>
-                <th>Süre</th>
-                <th>Mesaj</th>
-              </tr>
-            </thead>
+          {backendStatus === "ok" ? (
+            <pre style={styles.codeBlock}>
+              {JSON.stringify(backendResponse, null, 2)}
+            </pre>
+          ) : (
+            <div style={styles.errorBox}>
+              <strong>Backend bağlantısı kurulamadı.</strong>
+              <span>{backendError || "Backend terminalini kontrol et."}</span>
+            </div>
+          )}
+        </article>
 
-            <tbody>
-              {failedResults.map((result) => (
-                <tr key={result.key}>
-                  <td>{result.title}</td>
-                  <td>{result.status}</td>
-                  <td>{result.durationMs} ms</td>
-                  <td>{result.message}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+        <article style={styles.panel}>
+          <h2 style={styles.panelTitle}>Hızlı Çözüm</h2>
 
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Tüm Modül Kontrolleri</h2>
+          <div style={styles.commandList}>
+            <div style={styles.commandBox}>
+              <span>Backend açma</span>
+              <code>cd backend && npm run dev</code>
+            </div>
 
-            <p className="panel-sub">
-              Her modül için bağlantı durumu, cevap süresi ve kayıt sayısı.
-            </p>
+            <div style={styles.commandBox}>
+              <span>Frontend açma</span>
+              <code>npm run dev -- --port 5173</code>
+            </div>
+
+            <div style={styles.commandBox}>
+              <span>Doğru adres</span>
+              <code>http://localhost:5173</code>
+            </div>
+
+            <div style={styles.commandBox}>
+              <span>Backend test</span>
+              <code>http://localhost:4000/api/health</code>
+            </div>
           </div>
-
-          <span className="mini-pill">
-            {workingResults.length} çalışıyor / {failedResults.length} hata
-          </span>
-        </div>
-
-        <table className="module-table">
-          <thead>
-            <tr>
-              <th>Durum</th>
-              <th>Modül</th>
-              <th>HTTP</th>
-              <th>Kayıt</th>
-              <th>Süre</th>
-              <th>Mesaj</th>
-              <th>Kontrol Saati</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {results.length === 0 ? (
-              <tr>
-                <td colSpan="7">Henüz kontrol yapılmadı.</td>
-              </tr>
-            ) : (
-              results.map((result) => (
-                <tr key={result.key}>
-                  <td>{result.ok ? "Çalışıyor" : "Hata"}</td>
-                  <td>{result.title}</td>
-                  <td>{result.status}</td>
-                  <td>{result.count}</td>
-                  <td>{result.durationMs} ms</td>
-                  <td>{result.message}</td>
-                  <td>{formatDateTime(result.checkedAt)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Kontrol Notu</h2>
-
-            <p className="panel-sub">
-              Bu ekran verileri değiştirmez. Sadece API’lerin çalışıp
-              çalışmadığını ve kaç kayıt döndüğünü kontrol eder.
-            </p>
-          </div>
-        </div>
-
-        <table className="module-table">
-          <tbody>
-            <tr>
-              <td>Backend kapalıysa</td>
-              <td>Çoğu modül “Bağlantı kurulamadı” gösterir.</td>
-            </tr>
-
-            <tr>
-              <td>Token bozulduysa</td>
-              <td>Auth isteyen modüller 401 veya 403 dönebilir.</td>
-            </tr>
-
-            <tr>
-              <td>Bir modül kırıldıysa</td>
-              <td>Sadece o modül hata verir; diğerleri çalışmaya devam eder.</td>
-            </tr>
-
-            <tr>
-              <td>Yavaş modül</td>
-              <td>1000 ms üzeri cevap süresi performans kontrolü gerektirir.</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+        </article>
+      </section>
+    </main>
   );
 }
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    padding: "28px",
+    color: "#f8fafc",
+    background:
+      "radial-gradient(circle at top left, #1d4ed8 0, transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 50%, #020617 100%)",
+  },
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "1fr 320px",
+    gap: "20px",
+    alignItems: "stretch",
+    marginBottom: "20px",
+  },
+  eyebrow: {
+    margin: 0,
+    color: "#bfdbfe",
+    fontSize: "12px",
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+    fontWeight: 800,
+  },
+  title: {
+    margin: "8px 0",
+    fontSize: "38px",
+    lineHeight: 1.08,
+  },
+  subtitle: {
+    margin: 0,
+    color: "#cbd5e1",
+    maxWidth: "740px",
+    lineHeight: 1.6,
+  },
+  heroCard: {
+    padding: "22px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(255,255,255,0.13)",
+    boxShadow: "0 24px 80px rgba(0,0,0,0.35)",
+  },
+  heroLabel: {
+    display: "block",
+    color: "#cbd5e1",
+    marginBottom: "14px",
+  },
+  heroNote: {
+    display: "block",
+    marginTop: "14px",
+    color: "#94a3b8",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: "16px",
+    marginBottom: "16px",
+  },
+  card: {
+    padding: "18px",
+    borderRadius: "20px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  cardHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    alignItems: "center",
+    marginBottom: "12px",
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: "15px",
+    color: "#e5e7eb",
+  },
+  cardValue: {
+    display: "block",
+    fontSize: "16px",
+    wordBreak: "break-all",
+    color: "#ffffff",
+  },
+  cardNote: {
+    margin: "10px 0 0",
+    color: "#94a3b8",
+    fontSize: "13px",
+    lineHeight: 1.5,
+  },
+  badge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "999px",
+    padding: "7px 10px",
+    fontSize: "12px",
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+  },
+  badgeOk: {
+    color: "#bbf7d0",
+    background: "rgba(34,197,94,0.18)",
+  },
+  badgeWarning: {
+    color: "#fde68a",
+    background: "rgba(245,158,11,0.18)",
+  },
+  badgeError: {
+    color: "#fecaca",
+    background: "rgba(239,68,68,0.2)",
+  },
+  badgeLoading: {
+    color: "#dbeafe",
+    background: "rgba(59,130,246,0.18)",
+  },
+  panelGrid: {
+    display: "grid",
+    gridTemplateColumns: "1.25fr 0.75fr",
+    gap: "16px",
+  },
+  panel: {
+    padding: "20px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  panelHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "12px",
+    marginBottom: "14px",
+  },
+  panelTitle: {
+    margin: 0,
+    fontSize: "20px",
+  },
+  panelText: {
+    margin: "6px 0 0",
+    color: "#94a3b8",
+    fontSize: "13px",
+  },
+  button: {
+    border: "0",
+    borderRadius: "999px",
+    padding: "10px 14px",
+    background: "linear-gradient(135deg, #3b82f6, #8b5cf6)",
+    color: "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  codeBlock: {
+    margin: 0,
+    minHeight: "180px",
+    padding: "16px",
+    borderRadius: "16px",
+    overflow: "auto",
+    color: "#dbeafe",
+    background: "rgba(15,23,42,0.72)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+  errorBox: {
+    display: "grid",
+    gap: "8px",
+    minHeight: "160px",
+    padding: "16px",
+    borderRadius: "16px",
+    color: "#fecaca",
+    background: "rgba(239,68,68,0.14)",
+    border: "1px solid rgba(239,68,68,0.24)",
+  },
+  commandList: {
+    display: "grid",
+    gap: "12px",
+    marginTop: "16px",
+  },
+  commandBox: {
+    display: "grid",
+    gap: "7px",
+    padding: "14px",
+    borderRadius: "16px",
+    background: "rgba(15,23,42,0.55)",
+  },
+};
+
+export default SystemHealthPage;
