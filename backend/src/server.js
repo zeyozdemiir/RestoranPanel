@@ -475,6 +475,116 @@ app.use(
 );
 
 
+
+
+// HANDSOFF_SETTINGS_PERMISSION_MIDDLEWARE
+
+function handsoffSettingsRestaurantId(req) {
+  return req.user?.restaurantId || req.user?.restaurant?.id || req.restaurantId || 1;
+}
+
+async function handsoffSettingsCurrentRoleMember(req) {
+  const restaurantId = handsoffSettingsRestaurantId(req);
+
+  const email = String(
+    req.user?.email ||
+    req.user?.user?.email ||
+    req.userEmail ||
+    ""
+  ).toLowerCase();
+
+  try {
+    if (!prisma.userRoleMember) {
+      return {
+        role: "OWNER",
+        status: "ACTIVE",
+        canManageSettings: true,
+      };
+    }
+
+    if (email) {
+      const member = await prisma.userRoleMember.findFirst({
+        where: {
+          restaurantId,
+          email: {
+            equals: email,
+          },
+        },
+      });
+
+      if (member) return member;
+    }
+
+    const owner = await prisma.userRoleMember.findFirst({
+      where: {
+        restaurantId,
+        role: "OWNER",
+        status: "ACTIVE",
+      },
+    });
+
+    if (owner) return owner;
+
+    return {
+      role: "OWNER",
+      status: "ACTIVE",
+      canManageSettings: true,
+    };
+  } catch (error) {
+    console.error("settings role lookup error:", error);
+
+    return {
+      role: "OWNER",
+      status: "ACTIVE",
+      canManageSettings: true,
+    };
+  }
+}
+
+function handsoffCanManageSettings(member) {
+  if (!member) return false;
+  if (member.status && member.status !== "ACTIVE") return false;
+  if (member.role === "OWNER") return true;
+
+  return Boolean(member.canManageSettings);
+}
+
+async function handsoffSettingsGuard(req, res, next) {
+  try {
+    const member = await handsoffSettingsCurrentRoleMember(req);
+
+    if (handsoffCanManageSettings(member)) {
+      req.handsoffRoleMember = member;
+      return next();
+    }
+
+    return res.status(403).json({
+      message: "Bu ayar işlemi için yetkiniz yok.",
+      requiredPermission: "canManageSettings",
+      currentRole: member?.role || null,
+    });
+  } catch (error) {
+    console.error("settings permission error:", error);
+
+    return res.status(500).json({
+      message: "Ayar yetki kontrolü yapılamadı.",
+      detail: error.message,
+    });
+  }
+}
+
+app.use(
+  [
+    "/api/restaurant-settings",
+    "/api/user-roles",
+    "/api/backup/export",
+    "/api/system-health"
+  ],
+  authMiddleware,
+  handsoffSettingsGuard
+);
+
+
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",

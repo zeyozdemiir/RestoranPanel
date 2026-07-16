@@ -20,6 +20,19 @@ import MonthlyManagementReportPage from "./MonthlyManagementReportPage";
 import ReportCenterPage from "./ReportCenterPage";
 import DailyChecklistPage from "./DailyChecklistPage";
 import ActionPlanPage from "./ActionPlanPage";
+import PermissionStatusPage from "./PermissionStatusPage";
+
+function isPermissionStatusPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("yetki durumu") ||
+    page.includes("yetki özeti") ||
+    page.includes("yetki ozeti") ||
+    page.includes("permission status")
+  );
+}
+
 
 function isActionPlanPage(activePage) {
   const page = String(activePage || "").toLocaleLowerCase("tr-TR");
@@ -2046,6 +2059,8 @@ return (
           <SystemHealthPage user={user} />
         ) : isBackupExportPage(activePage) ? (
           <BackupExportPage user={user} />
+        ) : isPermissionStatusPage(activePage) ? (
+          <PermissionStatusPage user={user} />
         ) : isActionPlanPage(activePage) ? (
           <ActionPlanPage user={user} />
         ) : isDailyChecklistPage(activePage) ? (
