@@ -1,16 +1,20 @@
 ﻿import React from "react";
 
-const dailyRows = [
-  { day: "Pazartesi", date: "15 Tem", cash: 38450, card: 74800, online: 15200, cashIn: 38450, cashOut: 14200, closingCash: 24250 },
-  { day: "Salı", date: "16 Tem", cash: 42100, card: 81250, online: 18400, cashIn: 42100, cashOut: 16800, closingCash: 49550 },
-  { day: "Çarşamba", date: "17 Tem", cash: 35600, card: 69500, online: 12600, cashIn: 35600, cashOut: 19300, closingCash: 65850 },
-  { day: "Perşembe", date: "18 Tem", cash: 47200, card: 88900, online: 22150, cashIn: 47200, cashOut: 22100, closingCash: 90950 },
-  { day: "Cuma", date: "19 Tem", cash: 58600, card: 104700, online: 28400, cashIn: 58600, cashOut: 26400, closingCash: 123150 },
-  { day: "Cumartesi", date: "20 Tem", cash: 73250, card: 126800, online: 34700, cashIn: 73250, cashOut: 31800, closingCash: 164600 },
-  { day: "Pazar", date: "21 Tem", cash: 61400, card: 98200, online: 26150, cashIn: 61400, cashOut: 28600, closingCash: 197400 },
+const dailyRevenueRows = [
+  { day: "Pazartesi", date: "15 Tem", cash: 38450, card: 74800, online: 15200 },
+  { day: "Salı", date: "16 Tem", cash: 42100, card: 81250, online: 18400 },
+  { day: "Çarşamba", date: "17 Tem", cash: 35600, card: 69500, online: 12600 },
+  { day: "Perşembe", date: "18 Tem", cash: 47200, card: 88900, online: 22150 },
+  { day: "Cuma", date: "19 Tem", cash: 58600, card: 104700, online: 28400 },
+  { day: "Cumartesi", date: "20 Tem", cash: 73250, card: 126800, online: 34700 },
+  { day: "Pazar", date: "21 Tem", cash: 61400, card: 98200, online: 26150 },
 ];
-
 const expenseData = [28, 31, 37, 42, 39, 46, 44, 51, 49, 56, 54, 61];
+const tableData = [
+  { label: "Nakit", value: "38.450 ₺", percent: 32 },
+  { label: "Kredi Kartı", value: "74.800 ₺", percent: 58 },
+  { label: "Online", value: "15.200 ₺", percent: 10 },
+];
 
 const tasks = [
   { title: "Kritik stok kontrolü", detail: "3 ürün minimum seviyeye yakın", status: "Takip" },
@@ -30,69 +34,83 @@ function sumBy(rows, key) {
   return rows.reduce((total, row) => total + row[key], 0);
 }
 
-function KpiCard({ title, value, note, tone }) {
-  return (
-    <article style={styles.kpiCard}>
-      <span style={styles.kpiTitle}>{title}</span>
-      <strong style={tone === "danger" ? styles.kpiValueDanger : styles.kpiValue}>{value}</strong>
-      <small style={styles.kpiNote}>{note}</small>
-    </article>
-  );
-}
-
-function DailyRevenueTable() {
-  const rows = dailyRows.map((row) => ({
+function DailyRevenueBreakdown() {
+  const rows = dailyRevenueRows.map((row) => ({
     ...row,
     total: row.cash + row.card + row.online,
   }));
 
+  const totalCash = sumBy(rows, "cash");
+  const totalCard = sumBy(rows, "card");
+  const totalOnline = sumBy(rows, "online");
+  const grandTotal = totalCash + totalCard + totalOnline;
+
+  const paymentTypes = [
+    { label: "Nakit", value: totalCash },
+    { label: "Kredi Kartı", value: totalCard },
+    { label: "Online", value: totalOnline },
+  ];
+
   return (
-    <div style={styles.tableWrap}>
-      <div style={styles.tableHeader}>
-        <span>Gün</span>
-        <span>Nakit</span>
-        <span>Kredi Kartı</span>
-        <span>Online</span>
-        <span>Günlük Toplam</span>
+    <div style={styles.revenueLayout}>
+      <div style={styles.revenueTableCard}>
+        <div style={styles.revenueTableTop}>
+          <div>
+            <h3 style={styles.revenueTableTitle}>Günlük Gelir Tablosu</h3>
+            <p style={styles.revenueTableText}>Nakit, kredi kartı ve online ödeme kırılımı</p>
+          </div>
+        </div>
+
+        <div style={styles.cleanTable}>
+          <div style={styles.cleanTableHeader}>
+            <span>Gün</span>
+            <span>Nakit</span>
+            <span>Kredi Kartı</span>
+            <span>Online</span>
+            <span>Günlük Toplam</span>
+          </div>
+
+          {rows.map((row) => (
+            <div key={row.date} style={styles.cleanTableRow}>
+              <div style={styles.cleanDayCell}>
+                <strong>{row.day}</strong>
+                <small>{row.date}</small>
+              </div>
+
+              <span>{formatCurrency(row.cash)}</span>
+              <span>{formatCurrency(row.card)}</span>
+              <span>{formatCurrency(row.online)}</span>
+              <strong>{formatCurrency(row.total)}</strong>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {rows.map((row) => (
-        <div key={row.date} style={styles.tableRow}>
-          <div style={styles.dayCell}>
-            <strong>{row.day}</strong>
-            <small>{row.date}</small>
-          </div>
+      <aside style={styles.revenueSummaryCard}>
+        <span style={styles.summaryLabel}>Haftalık Toplam</span>
+        <strong style={styles.summaryTotal}>{formatCurrency(grandTotal)}</strong>
 
-          <span>{formatCurrency(row.cash)}</span>
-          <span>{formatCurrency(row.card)}</span>
-          <span>{formatCurrency(row.online)}</span>
-          <strong>{formatCurrency(row.total)}</strong>
-        </div>
-      ))}
-    </div>
-  );
-}
+        <div style={styles.summaryDivider} />
 
-function CashFlowPanel() {
-  return (
-    <div style={styles.cashFlowList}>
-      {dailyRows.map((row) => (
-        <article key={row.date} style={styles.cashFlowItem}>
-          <div style={styles.cashFlowTop}>
-            <div>
-              <strong>{row.day}</strong>
-              <small>{row.date}</small>
+        <div style={styles.summaryList}>
+          {paymentTypes.map((item) => (
+            <div key={item.label} style={styles.summaryItem}>
+              <div>
+                <span style={styles.summaryItemLabel}>{item.label}</span>
+                <small style={styles.summaryItemPercent}>
+                  %{Math.round((item.value / grandTotal) * 100)}
+                </small>
+              </div>
+
+              <strong style={styles.summaryItemValue}>{formatCurrency(item.value)}</strong>
             </div>
+          ))}
+        </div>
 
-            <strong style={styles.cashClosing}>{formatCurrency(row.closingCash)}</strong>
-          </div>
-
-          <div style={styles.cashFlowMini}>
-            <span>Giriş: {formatCurrency(row.cashIn)}</span>
-            <span>Çıkış: {formatCurrency(row.cashOut)}</span>
-          </div>
-        </article>
-      ))}
+        <div style={styles.summaryNote}>
+          Günlük gelirler ödeme tipine göre ayrı gösterilir.
+        </div>
+      </aside>
     </div>
   );
 }
@@ -130,14 +148,31 @@ function DonutChart() {
   );
 }
 
-function ExecutiveDashboardPage() {
-  const today = dailyRows[dailyRows.length - 1];
-  const todayTotal = today.cash + today.card + today.online;
-  const weeklyTotal = dailyRows.reduce((sum, row) => sum + row.cash + row.card + row.online, 0);
-  const weeklyCash = sumBy(dailyRows, "cash");
-  const weeklyCard = sumBy(dailyRows, "card");
-  const weeklyOnline = sumBy(dailyRows, "online");
+function ProgressRow({ label, value, percent }) {
+  return (
+    <div style={styles.progressRow}>
+      <div style={styles.progressHead}>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+      <div style={styles.progressBg}>
+        <div style={{ ...styles.progressFill, width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
 
+function KpiCard({ title, value, note, tone }) {
+  return (
+    <article style={styles.kpiCard}>
+      <span style={styles.kpiTitle}>{title}</span>
+      <strong style={tone === "danger" ? styles.kpiValueDanger : styles.kpiValue}>{value}</strong>
+      <small style={styles.kpiNote}>{note}</small>
+    </article>
+  );
+}
+
+function ExecutiveDashboardPage() {
   return (
     <main style={styles.page}>
       <section style={styles.hero}>
@@ -145,60 +180,34 @@ function ExecutiveDashboardPage() {
           <p style={styles.eyebrow}>HandsOff Yönetim Paneli</p>
           <h1 style={styles.title}>Yönetim Özeti</h1>
           <p style={styles.subtitle}>
-            Ciro, ödeme dağılımı, nakit akışı, gider ve operasyon durumunu tek ekranda takip edin.
+            Ciro, gider, nakit, stok ve operasyon durumunu tek ekranda takip etmek için hazırlanmış grafikli özet ekranı.
           </p>
         </div>
 
         <div style={styles.heroCard}>
-          <span style={styles.heroLabel}>Haftalık Toplam Gelir</span>
-          <strong style={styles.heroValue}>{formatCurrency(weeklyTotal)}</strong>
-          <small style={styles.heroNote}>Günlük gelir tablosundan hesaplandı</small>
+          <span style={styles.heroLabel}>Bugünkü Tahmini Ciro</span>
+          <strong style={styles.heroValue}>{formatCurrency(128450)}</strong>
+          <small style={styles.heroNote}>Dünkü güne göre +%12</small>
         </div>
       </section>
 
       <section style={styles.kpiGrid}>
-        <KpiCard title="Bugünkü Ciro" value={formatCurrency(todayTotal)} note="Son gün toplam gelir" />
-        <KpiCard title="Haftalık Nakit" value={formatCurrency(weeklyCash)} note="Nakit tahsilat" />
-        <KpiCard title="Haftalık Kart" value={formatCurrency(weeklyCard)} note="Kredi kartı tahsilat" />
-        <KpiCard title="Haftalık Online" value={formatCurrency(weeklyOnline)} note="Online ödeme" />
+        <KpiCard title="Bugünkü Ciro" value="128.450 ₺" note="Tahmini günlük satış" />
+        <KpiCard title="Bugünkü Gider" value="42.180 ₺" note="Operasyonel gider" />
+        <KpiCard title="Net Durum" value="86.270 ₺" note="Ciro - gider" />
+        <KpiCard title="Kritik Stok" value="3" note="Takip gereken ürün" tone="danger" />
       </section>
 
-      <section style={styles.mainGrid}>
+      <section style={styles.dashboardGrid}>
         <article style={styles.largePanel}>
           <div style={styles.panelHeader}>
             <div>
-              <h2 style={styles.panelTitle}>Günlük Gelir Tablosu</h2>
-              <p style={styles.panelText}>Her gün için nakit, kredi kartı, online ve toplam gelir.</p>
+              <h2 style={styles.panelTitle}>Günlük Gelir Dağılımı</h2>
+              <p style={styles.panelText}>Nakit, kredi kartı ve online ödemelerin günlük görünümü</p>
             </div>
-            <span style={styles.pill}>Tablo</span>
+            <span style={styles.pill}>Grafik</span>
           </div>
-
-          <DailyRevenueTable />
-        </article>
-
-        <article style={styles.sidePanel}>
-          <div style={styles.panelHeader}>
-            <div>
-              <h2 style={styles.panelTitle}>Günlük Nakit Akışı</h2>
-              <p style={styles.panelText}>Günlük kasa giriş, çıkış ve kapanış.</p>
-            </div>
-          </div>
-
-          <CashFlowPanel />
-        </article>
-      </section>
-
-      <section style={styles.mainGrid}>
-        <article style={styles.largePanel}>
-          <div style={styles.panelHeader}>
-            <div>
-              <h2 style={styles.panelTitle}>Gider Dağılımı</h2>
-              <p style={styles.panelText}>Dönemsel gider hareketi.</p>
-            </div>
-            <span style={styles.pill}>Bar</span>
-          </div>
-
-          <BarChart data={expenseData} />
+          <DailyRevenueBreakdown />
         </article>
 
         <article style={styles.sidePanel}>
@@ -208,8 +217,29 @@ function ExecutiveDashboardPage() {
               <p style={styles.panelText}>Genel oran</p>
             </div>
           </div>
-
           <DonutChart />
+        </article>
+      </section>
+
+      <section style={styles.dashboardGrid}>
+        <article style={styles.largePanel}>
+          <div style={styles.panelHeader}>
+            <div>
+              <h2 style={styles.panelTitle}>Gider Dağılımı</h2>
+              <p style={styles.panelText}>Dönemsel gider hareketi</p>
+            </div>
+            <span style={styles.pill}>Bar</span>
+          </div>
+          <BarChart data={expenseData} />
+        </article>
+
+        <article style={styles.sidePanel}>
+          <h2 style={styles.panelTitle}>Ödeme Kanalları</h2>
+          <div style={styles.progressList}>
+            {tableData.map((item) => (
+              <ProgressRow key={item.label} {...item} />
+            ))}
+          </div>
         </article>
       </section>
 
@@ -304,7 +334,7 @@ const styles = {
   },
   heroValue: {
     display: "block",
-    fontSize: "32px",
+    fontSize: "34px",
     color: "#ffffff",
   },
   heroNote: {
@@ -335,12 +365,12 @@ const styles = {
   },
   kpiValue: {
     display: "block",
-    fontSize: "26px",
+    fontSize: "28px",
     color: "#ffffff",
   },
   kpiValueDanger: {
     display: "block",
-    fontSize: "26px",
+    fontSize: "28px",
     color: "#fecaca",
   },
   kpiNote: {
@@ -348,9 +378,9 @@ const styles = {
     color: "#94a3b8",
     marginTop: "8px",
   },
-  mainGrid: {
+  dashboardGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.55fr) minmax(300px, 0.75fr)",
+    gridTemplateColumns: "minmax(0, 1.55fr) minmax(280px, 0.75fr)",
     gap: "16px",
     marginBottom: "16px",
   },
@@ -378,7 +408,7 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: "12px",
-    marginBottom: "14px",
+    marginBottom: "12px",
   },
   panelTitle: {
     margin: 0,
@@ -397,65 +427,131 @@ const styles = {
     fontSize: "12px",
     fontWeight: 800,
   },
-  tableWrap: {
+  chartSvg: {
+    width: "100%",
+    height: "230px",
+    display: "block",
+    marginTop: "8px",
+  },
+  revenueLayout: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 1fr) 280px",
+    gap: "16px",
+    alignItems: "stretch",
+    marginTop: "16px",
+  },
+  revenueTableCard: {
+    minWidth: 0,
+    padding: "16px",
+    borderRadius: "20px",
+    background: "rgba(15,23,42,0.46)",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+  revenueTableTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: "14px",
+  },
+  revenueTableTitle: {
+    margin: 0,
+    fontSize: "16px",
+    color: "#ffffff",
+  },
+  revenueTableText: {
+    margin: "5px 0 0",
+    color: "#94a3b8",
+    fontSize: "12px",
+  },
+  cleanTable: {
     display: "grid",
     gap: "8px",
-    overflowX: "auto",
+    width: "100%",
   },
-  tableHeader: {
-    minWidth: "760px",
+  cleanTableHeader: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr 1fr 1.15fr",
-    gap: "12px",
-    padding: "0 14px 6px",
+    gridTemplateColumns: "1.15fr 1fr 1fr 1fr 1.15fr",
+    gap: "10px",
+    padding: "0 10px 4px",
     color: "#94a3b8",
     fontSize: "12px",
     fontWeight: 900,
   },
-  tableRow: {
-    minWidth: "760px",
+  cleanTableRow: {
     display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr 1fr 1.15fr",
-    gap: "12px",
+    gridTemplateColumns: "1.15fr 1fr 1fr 1fr 1.15fr",
+    gap: "10px",
     alignItems: "center",
-    padding: "13px 14px",
-    borderRadius: "16px",
-    background: "rgba(15,23,42,0.5)",
-    border: "1px solid rgba(255,255,255,0.07)",
+    padding: "12px 10px",
+    borderRadius: "14px",
+    background: "rgba(255,255,255,0.065)",
     color: "#e5e7eb",
     fontSize: "13px",
   },
-  dayCell: {
+  cleanDayCell: {
     display: "grid",
     gap: "3px",
   },
-  cashFlowList: {
+  revenueSummaryCard: {
+    padding: "18px",
+    borderRadius: "20px",
+    background: "rgba(15,23,42,0.58)",
+    border: "1px solid rgba(255,255,255,0.09)",
+  },
+  summaryLabel: {
+    display: "block",
+    color: "#94a3b8",
+    fontSize: "13px",
+    marginBottom: "8px",
+  },
+  summaryTotal: {
+    display: "block",
+    color: "#ffffff",
+    fontSize: "30px",
+    lineHeight: 1.08,
+  },
+  summaryDivider: {
+    height: "1px",
+    background: "rgba(255,255,255,0.1)",
+    margin: "18px 0",
+  },
+  summaryList: {
     display: "grid",
-    gap: "10px",
+    gap: "11px",
   },
-  cashFlowItem: {
-    padding: "13px",
-    borderRadius: "16px",
-    background: "rgba(15,23,42,0.5)",
-    border: "1px solid rgba(255,255,255,0.07)",
-  },
-  cashFlowTop: {
+  summaryItem: {
     display: "flex",
     justifyContent: "space-between",
-    gap: "10px",
-    alignItems: "flex-start",
+    gap: "12px",
+    alignItems: "center",
+    padding: "12px",
+    borderRadius: "15px",
+    background: "rgba(255,255,255,0.07)",
   },
-  cashClosing: {
-    color: "#bbf7d0",
+  summaryItemLabel: {
+    display: "block",
+    color: "#e5e7eb",
+    fontSize: "13px",
+    fontWeight: 900,
+  },
+  summaryItemPercent: {
+    display: "block",
+    color: "#c4b5fd",
+    marginTop: "3px",
+  },
+  summaryItemValue: {
+    color: "#ffffff",
+    fontSize: "13px",
     whiteSpace: "nowrap",
   },
-  cashFlowMini: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "10px",
-    marginTop: "9px",
-    color: "#94a3b8",
+  summaryNote: {
+    marginTop: "14px",
+    padding: "12px",
+    borderRadius: "14px",
+    color: "#cbd5e1",
+    background: "rgba(139,92,246,0.13)",
     fontSize: "12px",
+    lineHeight: 1.5,
   },
   barChart: {
     height: "210px",
@@ -507,6 +603,32 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
+  },
+  progressList: {
+    display: "grid",
+    gap: "18px",
+    marginTop: "22px",
+  },
+  progressRow: {
+    display: "grid",
+    gap: "8px",
+  },
+  progressHead: {
+    display: "flex",
+    justifyContent: "space-between",
+    color: "#e5e7eb",
+    fontSize: "13px",
+  },
+  progressBg: {
+    height: "10px",
+    borderRadius: "999px",
+    background: "rgba(255,255,255,0.12)",
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: "999px",
+    background: "linear-gradient(90deg, #8b5cf6, #c4b5fd)",
   },
   bottomGrid: {
     display: "grid",

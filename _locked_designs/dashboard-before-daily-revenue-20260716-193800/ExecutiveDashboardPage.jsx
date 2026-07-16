@@ -1,16 +1,12 @@
 ﻿import React from "react";
 
-const dailyRows = [
-  { day: "Pazartesi", date: "15 Tem", cash: 38450, card: 74800, online: 15200, cashIn: 38450, cashOut: 14200, closingCash: 24250 },
-  { day: "Salı", date: "16 Tem", cash: 42100, card: 81250, online: 18400, cashIn: 42100, cashOut: 16800, closingCash: 49550 },
-  { day: "Çarşamba", date: "17 Tem", cash: 35600, card: 69500, online: 12600, cashIn: 35600, cashOut: 19300, closingCash: 65850 },
-  { day: "Perşembe", date: "18 Tem", cash: 47200, card: 88900, online: 22150, cashIn: 47200, cashOut: 22100, closingCash: 90950 },
-  { day: "Cuma", date: "19 Tem", cash: 58600, card: 104700, online: 28400, cashIn: 58600, cashOut: 26400, closingCash: 123150 },
-  { day: "Cumartesi", date: "20 Tem", cash: 73250, card: 126800, online: 34700, cashIn: 73250, cashOut: 31800, closingCash: 164600 },
-  { day: "Pazar", date: "21 Tem", cash: 61400, card: 98200, online: 26150, cashIn: 61400, cashOut: 28600, closingCash: 197400 },
-];
-
+const revenueData = [42, 58, 49, 74, 68, 91, 86, 112, 104, 128, 119, 142];
 const expenseData = [28, 31, 37, 42, 39, 46, 44, 51, 49, 56, 54, 61];
+const tableData = [
+  { label: "Nakit", value: "38.450 ₺", percent: 32 },
+  { label: "Kredi Kartı", value: "74.800 ₺", percent: 58 },
+  { label: "Online", value: "15.200 ₺", percent: 10 },
+];
 
 const tasks = [
   { title: "Kritik stok kontrolü", detail: "3 ürün minimum seviyeye yakın", status: "Takip" },
@@ -26,74 +22,61 @@ function formatCurrency(value) {
   }).format(value);
 }
 
-function sumBy(rows, key) {
-  return rows.reduce((total, row) => total + row[key], 0);
-}
+function LineChart({ data }) {
+  const width = 520;
+  const height = 180;
+  const max = Math.max(...data);
+  const min = Math.min(...data);
+  const range = max - min || 1;
 
-function KpiCard({ title, value, note, tone }) {
-  return (
-    <article style={styles.kpiCard}>
-      <span style={styles.kpiTitle}>{title}</span>
-      <strong style={tone === "danger" ? styles.kpiValueDanger : styles.kpiValue}>{value}</strong>
-      <small style={styles.kpiNote}>{note}</small>
-    </article>
-  );
-}
+  const points = data
+    .map((value, index) => {
+      const x = (index / (data.length - 1)) * width;
+      const y = height - ((value - min) / range) * height;
+      return `${x},${y}`;
+    })
+    .join(" ");
 
-function DailyRevenueTable() {
-  const rows = dailyRows.map((row) => ({
-    ...row,
-    total: row.cash + row.card + row.online,
-  }));
+  const areaPoints = `0,${height} ${points} ${width},${height}`;
 
   return (
-    <div style={styles.tableWrap}>
-      <div style={styles.tableHeader}>
-        <span>Gün</span>
-        <span>Nakit</span>
-        <span>Kredi Kartı</span>
-        <span>Online</span>
-        <span>Günlük Toplam</span>
-      </div>
+    <svg viewBox={`0 0 ${width} ${height}`} style={styles.chartSvg}>
+      <defs>
+        <linearGradient id="lineFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="#a78bfa" stopOpacity="0.42" />
+          <stop offset="100%" stopColor="#a78bfa" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
 
-      {rows.map((row) => (
-        <div key={row.date} style={styles.tableRow}>
-          <div style={styles.dayCell}>
-            <strong>{row.day}</strong>
-            <small>{row.date}</small>
-          </div>
-
-          <span>{formatCurrency(row.cash)}</span>
-          <span>{formatCurrency(row.card)}</span>
-          <span>{formatCurrency(row.online)}</span>
-          <strong>{formatCurrency(row.total)}</strong>
-        </div>
+      {[0, 1, 2, 3].map((line) => (
+        <line
+          key={line}
+          x1="0"
+          x2={width}
+          y1={(height / 3) * line}
+          y2={(height / 3) * line}
+          stroke="rgba(255,255,255,0.08)"
+          strokeWidth="1"
+        />
       ))}
-    </div>
-  );
-}
 
-function CashFlowPanel() {
-  return (
-    <div style={styles.cashFlowList}>
-      {dailyRows.map((row) => (
-        <article key={row.date} style={styles.cashFlowItem}>
-          <div style={styles.cashFlowTop}>
-            <div>
-              <strong>{row.day}</strong>
-              <small>{row.date}</small>
-            </div>
+      <polygon points={areaPoints} fill="url(#lineFill)" />
+      <polyline
+        points={points}
+        fill="none"
+        stroke="#c4b5fd"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
 
-            <strong style={styles.cashClosing}>{formatCurrency(row.closingCash)}</strong>
-          </div>
+      {data.map((value, index) => {
+        const x = (index / (data.length - 1)) * width;
+        const y = height - ((value - min) / range) * height;
 
-          <div style={styles.cashFlowMini}>
-            <span>Giriş: {formatCurrency(row.cashIn)}</span>
-            <span>Çıkış: {formatCurrency(row.cashOut)}</span>
-          </div>
-        </article>
-      ))}
-    </div>
+        return <circle key={index} cx={x} cy={y} r="5" fill="#ffffff" stroke="#8b5cf6" strokeWidth="3" />;
+      })}
+    </svg>
   );
 }
 
@@ -130,14 +113,31 @@ function DonutChart() {
   );
 }
 
-function ExecutiveDashboardPage() {
-  const today = dailyRows[dailyRows.length - 1];
-  const todayTotal = today.cash + today.card + today.online;
-  const weeklyTotal = dailyRows.reduce((sum, row) => sum + row.cash + row.card + row.online, 0);
-  const weeklyCash = sumBy(dailyRows, "cash");
-  const weeklyCard = sumBy(dailyRows, "card");
-  const weeklyOnline = sumBy(dailyRows, "online");
+function ProgressRow({ label, value, percent }) {
+  return (
+    <div style={styles.progressRow}>
+      <div style={styles.progressHead}>
+        <span>{label}</span>
+        <strong>{value}</strong>
+      </div>
+      <div style={styles.progressBg}>
+        <div style={{ ...styles.progressFill, width: `${percent}%` }} />
+      </div>
+    </div>
+  );
+}
 
+function KpiCard({ title, value, note, tone }) {
+  return (
+    <article style={styles.kpiCard}>
+      <span style={styles.kpiTitle}>{title}</span>
+      <strong style={tone === "danger" ? styles.kpiValueDanger : styles.kpiValue}>{value}</strong>
+      <small style={styles.kpiNote}>{note}</small>
+    </article>
+  );
+}
+
+function ExecutiveDashboardPage() {
   return (
     <main style={styles.page}>
       <section style={styles.hero}>
@@ -145,60 +145,34 @@ function ExecutiveDashboardPage() {
           <p style={styles.eyebrow}>HandsOff Yönetim Paneli</p>
           <h1 style={styles.title}>Yönetim Özeti</h1>
           <p style={styles.subtitle}>
-            Ciro, ödeme dağılımı, nakit akışı, gider ve operasyon durumunu tek ekranda takip edin.
+            Ciro, gider, nakit, stok ve operasyon durumunu tek ekranda takip etmek için hazırlanmış grafikli özet ekranı.
           </p>
         </div>
 
         <div style={styles.heroCard}>
-          <span style={styles.heroLabel}>Haftalık Toplam Gelir</span>
-          <strong style={styles.heroValue}>{formatCurrency(weeklyTotal)}</strong>
-          <small style={styles.heroNote}>Günlük gelir tablosundan hesaplandı</small>
+          <span style={styles.heroLabel}>Bugünkü Tahmini Ciro</span>
+          <strong style={styles.heroValue}>{formatCurrency(128450)}</strong>
+          <small style={styles.heroNote}>Dünkü güne göre +%12</small>
         </div>
       </section>
 
       <section style={styles.kpiGrid}>
-        <KpiCard title="Bugünkü Ciro" value={formatCurrency(todayTotal)} note="Son gün toplam gelir" />
-        <KpiCard title="Haftalık Nakit" value={formatCurrency(weeklyCash)} note="Nakit tahsilat" />
-        <KpiCard title="Haftalık Kart" value={formatCurrency(weeklyCard)} note="Kredi kartı tahsilat" />
-        <KpiCard title="Haftalık Online" value={formatCurrency(weeklyOnline)} note="Online ödeme" />
+        <KpiCard title="Bugünkü Ciro" value="128.450 ₺" note="Tahmini günlük satış" />
+        <KpiCard title="Bugünkü Gider" value="42.180 ₺" note="Operasyonel gider" />
+        <KpiCard title="Net Durum" value="86.270 ₺" note="Ciro - gider" />
+        <KpiCard title="Kritik Stok" value="3" note="Takip gereken ürün" tone="danger" />
       </section>
 
-      <section style={styles.mainGrid}>
+      <section style={styles.dashboardGrid}>
         <article style={styles.largePanel}>
           <div style={styles.panelHeader}>
             <div>
-              <h2 style={styles.panelTitle}>Günlük Gelir Tablosu</h2>
-              <p style={styles.panelText}>Her gün için nakit, kredi kartı, online ve toplam gelir.</p>
+              <h2 style={styles.panelTitle}>Aylık Ciro Grafiği</h2>
+              <p style={styles.panelText}>Son 12 dönem performans görünümü</p>
             </div>
-            <span style={styles.pill}>Tablo</span>
+            <span style={styles.pill}>Grafik</span>
           </div>
-
-          <DailyRevenueTable />
-        </article>
-
-        <article style={styles.sidePanel}>
-          <div style={styles.panelHeader}>
-            <div>
-              <h2 style={styles.panelTitle}>Günlük Nakit Akışı</h2>
-              <p style={styles.panelText}>Günlük kasa giriş, çıkış ve kapanış.</p>
-            </div>
-          </div>
-
-          <CashFlowPanel />
-        </article>
-      </section>
-
-      <section style={styles.mainGrid}>
-        <article style={styles.largePanel}>
-          <div style={styles.panelHeader}>
-            <div>
-              <h2 style={styles.panelTitle}>Gider Dağılımı</h2>
-              <p style={styles.panelText}>Dönemsel gider hareketi.</p>
-            </div>
-            <span style={styles.pill}>Bar</span>
-          </div>
-
-          <BarChart data={expenseData} />
+          <LineChart data={revenueData} />
         </article>
 
         <article style={styles.sidePanel}>
@@ -208,8 +182,29 @@ function ExecutiveDashboardPage() {
               <p style={styles.panelText}>Genel oran</p>
             </div>
           </div>
-
           <DonutChart />
+        </article>
+      </section>
+
+      <section style={styles.dashboardGrid}>
+        <article style={styles.largePanel}>
+          <div style={styles.panelHeader}>
+            <div>
+              <h2 style={styles.panelTitle}>Gider Dağılımı</h2>
+              <p style={styles.panelText}>Dönemsel gider hareketi</p>
+            </div>
+            <span style={styles.pill}>Bar</span>
+          </div>
+          <BarChart data={expenseData} />
+        </article>
+
+        <article style={styles.sidePanel}>
+          <h2 style={styles.panelTitle}>Ödeme Kanalları</h2>
+          <div style={styles.progressList}>
+            {tableData.map((item) => (
+              <ProgressRow key={item.label} {...item} />
+            ))}
+          </div>
         </article>
       </section>
 
@@ -304,7 +299,7 @@ const styles = {
   },
   heroValue: {
     display: "block",
-    fontSize: "32px",
+    fontSize: "34px",
     color: "#ffffff",
   },
   heroNote: {
@@ -335,12 +330,12 @@ const styles = {
   },
   kpiValue: {
     display: "block",
-    fontSize: "26px",
+    fontSize: "28px",
     color: "#ffffff",
   },
   kpiValueDanger: {
     display: "block",
-    fontSize: "26px",
+    fontSize: "28px",
     color: "#fecaca",
   },
   kpiNote: {
@@ -348,9 +343,9 @@ const styles = {
     color: "#94a3b8",
     marginTop: "8px",
   },
-  mainGrid: {
+  dashboardGrid: {
     display: "grid",
-    gridTemplateColumns: "minmax(0, 1.55fr) minmax(300px, 0.75fr)",
+    gridTemplateColumns: "minmax(0, 1.55fr) minmax(280px, 0.75fr)",
     gap: "16px",
     marginBottom: "16px",
   },
@@ -378,7 +373,7 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: "12px",
-    marginBottom: "14px",
+    marginBottom: "12px",
   },
   panelTitle: {
     margin: 0,
@@ -397,65 +392,11 @@ const styles = {
     fontSize: "12px",
     fontWeight: 800,
   },
-  tableWrap: {
-    display: "grid",
-    gap: "8px",
-    overflowX: "auto",
-  },
-  tableHeader: {
-    minWidth: "760px",
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr 1fr 1.15fr",
-    gap: "12px",
-    padding: "0 14px 6px",
-    color: "#94a3b8",
-    fontSize: "12px",
-    fontWeight: 900,
-  },
-  tableRow: {
-    minWidth: "760px",
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr 1fr 1fr 1.15fr",
-    gap: "12px",
-    alignItems: "center",
-    padding: "13px 14px",
-    borderRadius: "16px",
-    background: "rgba(15,23,42,0.5)",
-    border: "1px solid rgba(255,255,255,0.07)",
-    color: "#e5e7eb",
-    fontSize: "13px",
-  },
-  dayCell: {
-    display: "grid",
-    gap: "3px",
-  },
-  cashFlowList: {
-    display: "grid",
-    gap: "10px",
-  },
-  cashFlowItem: {
-    padding: "13px",
-    borderRadius: "16px",
-    background: "rgba(15,23,42,0.5)",
-    border: "1px solid rgba(255,255,255,0.07)",
-  },
-  cashFlowTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "10px",
-    alignItems: "flex-start",
-  },
-  cashClosing: {
-    color: "#bbf7d0",
-    whiteSpace: "nowrap",
-  },
-  cashFlowMini: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "10px",
-    marginTop: "9px",
-    color: "#94a3b8",
-    fontSize: "12px",
+  chartSvg: {
+    width: "100%",
+    height: "230px",
+    display: "block",
+    marginTop: "8px",
   },
   barChart: {
     height: "210px",
@@ -507,6 +448,32 @@ const styles = {
     flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
+  },
+  progressList: {
+    display: "grid",
+    gap: "18px",
+    marginTop: "22px",
+  },
+  progressRow: {
+    display: "grid",
+    gap: "8px",
+  },
+  progressHead: {
+    display: "flex",
+    justifyContent: "space-between",
+    color: "#e5e7eb",
+    fontSize: "13px",
+  },
+  progressBg: {
+    height: "10px",
+    borderRadius: "999px",
+    background: "rgba(255,255,255,0.12)",
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: "999px",
+    background: "linear-gradient(90deg, #8b5cf6, #c4b5fd)",
   },
   bottomGrid: {
     display: "grid",
