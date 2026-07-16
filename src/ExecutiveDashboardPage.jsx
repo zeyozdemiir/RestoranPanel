@@ -1,6 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 
-function formatMoney(value) {
+function money(value) {
   return new Intl.NumberFormat("tr-TR", {
     style: "currency",
     currency: "TRY",
@@ -8,115 +8,81 @@ function formatMoney(value) {
   }).format(Number(value || 0));
 }
 
-function formatDate(value) {
+function dateText(value) {
   if (!value) return "-";
+
   return new Date(value).toLocaleDateString("tr-TR");
 }
 
-function formatDateTime(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleString("tr-TR");
+function isActive(record) {
+  const status = String(record?.status || "").toUpperCase();
+
+  return status !== "CANCELLED" && status !== "IPTAL";
 }
 
-function getNumericValue(item, keys) {
+function amountOf(record, keys) {
   for (const key of keys) {
-    if (item && item[key] !== undefined && item[key] !== null && item[key] !== "") {
-      return Number(item[key] || 0);
+    if (record?.[key] !== undefined && record?.[key] !== null && record?.[key] !== "") {
+      return Number(record[key] || 0);
     }
   }
 
   return 0;
 }
 
-function getRecordDate(item) {
-  return (
-    item.saleDate ||
-    item.movementDate ||
-    item.paymentDate ||
-    item.expenseDate ||
-    item.recordDate ||
-    item.orderDate ||
-    item.date ||
-    item.createdAt ||
-    item.updatedAt ||
-    null
-  );
-}
-
-function isSameDay(value, targetDate = new Date()) {
+function sameDay(value) {
   if (!value) return false;
 
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) return false;
+  const today = new Date();
 
   return (
-    date.getFullYear() === targetDate.getFullYear() &&
-    date.getMonth() === targetDate.getMonth() &&
-    date.getDate() === targetDate.getDate()
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
   );
 }
 
-function isActive(record) {
-  const status = String(record?.status || "").toUpperCase();
-  return status !== "CANCELLED" && status !== "IPTAL";
+function goTo(page) {
+  localStorage.setItem("handsoff_last_requested_page", page);
+
+  window.dispatchEvent(
+    new CustomEvent("handsoff:navigate", {
+      detail: page,
+    })
+  );
 }
 
-const quickModules = [
+const moduleCards = [
   {
     title: "Günlük Ciro",
-    description: "Nakit, kart, paket servis ve günlük gelir girişi",
+    text: "Nakit, kart ve online gelir girişini yap.",
     page: "Günlük Ciro / Gelir Girişi",
   },
   {
     title: "Nakit Akışı",
-    description: "Kasa, banka, tedarikçi ödemesi ve nakit hareketleri",
+    text: "Kasa, banka, ödeme ve manuel hareketleri izle.",
     page: "Nakit Akışı / Kasa Banka",
   },
   {
     title: "Kâr Zarar",
-    description: "Gelir, gider ve fire maliyeti sonucunu gösterir",
+    text: "Gelir, gider ve fire sonrası sonucu gör.",
     page: "Kâr Zarar",
   },
   {
-    title: "Tedarikçiler",
-    description: "Tedarikçi kartları ve iletişim bilgileri",
-    page: "Tedarikçiler",
-  },
-  {
     title: "Tedarikçi Cari",
-    description: "Borç, ödeme ve kalan cari bakiye takibi",
+    text: "Açık borç, ödeme ve kalan bakiyeyi takip et.",
     page: "Tedarikçi Cari / Borç Takibi",
   },
   {
-    title: "Satın Alma",
-    description: "Satın alma talepleri, gidere ve stoğa aktarım",
-    page: "Satın Alma Talepleri",
-  },
-  {
     title: "Stok Yönetimi",
-    description: "Stok kartları, mevcut stok ve minimum stok uyarısı",
+    text: "Minimum stok ve stok kartlarını kontrol et.",
     page: "Stok Yönetimi",
   },
   {
-    title: "Stok Sayımı",
-    description: "Fiili sayım, fark hesaplama ve stok düzeltme",
-    page: "Stok Sayımı",
-  },
-  {
-    title: "Zayi / Kırılma",
-    description: "Fire, kırılma, dökülme ve personel tüketimi",
-    page: "Zayi / Kırılma",
-  },
-  {
-    title: "Veri Yedekleme",
-    description: "Tüm verileri JSON dosyası olarak dışa aktar",
+    title: "Yedekleme",
+    text: "Tüm panel verisini JSON olarak dışa aktar.",
     page: "Veri Yedekleme / Dışa Aktarma",
-  },
-  {
-    title: "Sistem Kontrol",
-    description: "Backend ve modül API sağlık kontrolü",
-    page: "Sistem Sağlık Kontrolü",
   },
 ];
 
@@ -124,27 +90,17 @@ export default function ExecutiveDashboardPage({ user }) {
   const [dailySales, setDailySales] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [supplierStatements, setSupplierStatements] = useState([]);
-  const [supplierPayments, setSupplierPayments] = useState([]);
   const [inventoryItems, setInventoryItems] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [wasteRecords, setWasteRecords] = useState([]);
   const [cashMovements, setCashMovements] = useState([]);
-  const [stockMovements, setStockMovements] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchDashboard();
   }, []);
-
-  function goToModule(page) {
-    window.dispatchEvent(
-      new CustomEvent("handsoff:navigate", {
-        detail: page,
-      })
-    );
-  }
 
   async function safeFetch(url, rootKey) {
     try {
@@ -180,318 +136,243 @@ export default function ExecutiveDashboardPage({ user }) {
     }
   }
 
-  async function fetchDashboardData() {
+  async function fetchDashboard() {
     try {
       setLoading(true);
       setError("");
       setMessage("");
 
       const [
-        salesList,
+        saleList,
         expenseList,
         statementData,
-        paymentList,
         inventoryList,
         purchaseOrderList,
         wasteList,
-        cashMovementList,
-        stockMovementList,
+        cashList,
       ] = await Promise.all([
         safeFetch("http://localhost:4000/api/daily-sales", "dailySales"),
         safeFetch("http://localhost:4000/api/expenses", "expenses"),
         safeFetch("http://localhost:4000/api/supplier-statements", null),
-        safeFetch("http://localhost:4000/api/supplier-payments", "supplierPayments"),
         safeFetch("http://localhost:4000/api/inventory-items", "inventoryItems"),
         safeFetch("http://localhost:4000/api/purchase-orders", "purchaseOrders"),
         safeFetch("http://localhost:4000/api/waste-records", "wasteRecords"),
         safeFetch("http://localhost:4000/api/cash-movements", "cashMovements"),
-        safeFetch("http://localhost:4000/api/stock-movements", "stockMovements"),
       ]);
 
-      setDailySales(salesList || []);
+      setDailySales(saleList || []);
       setExpenses(expenseList || []);
       setSupplierStatements(statementData?.supplierStatements || []);
-      setSupplierPayments(paymentList || []);
       setInventoryItems(inventoryList || []);
       setPurchaseOrders(purchaseOrderList || []);
       setWasteRecords(wasteList || []);
-      setCashMovements(cashMovementList || []);
-      setStockMovements(stockMovementList || []);
+      setCashMovements(cashList || []);
 
       setMessage("Yönetim özeti güncellendi.");
     } catch {
-      setError("Yönetim özeti verileri alınırken backend bağlantısı kurulamadı.");
+      setError("Dashboard verileri alınamadı.");
     } finally {
       setLoading(false);
     }
   }
 
-  const activeDailySales = dailySales.filter(isActive);
-  const activeExpenses = expenses.filter(isActive);
-  const activeWasteRecords = wasteRecords.filter(isActive);
-  const activeCashMovements = cashMovements.filter(isActive);
-  const activeSupplierPayments = supplierPayments.filter(isActive);
-
-  const todaySales = activeDailySales.filter((sale) => isSameDay(sale.saleDate || sale.date));
-  const todayExpenses = activeExpenses.filter((expense) => isSameDay(getRecordDate(expense)));
-  const todayWasteRecords = activeWasteRecords.filter((record) => isSameDay(getRecordDate(record)));
-  const todayCashMovements = activeCashMovements.filter((movement) => isSameDay(getRecordDate(movement)));
-  const todaySupplierPayments = activeSupplierPayments.filter((payment) => isSameDay(getRecordDate(payment)));
-
   const report = useMemo(() => {
-    const todayRevenue = todaySales.reduce((total, sale) => {
-      return total + getNumericValue(sale, ["totalAmount", "totalRevenue", "totalSales", "revenue", "amount"]);
-    }, 0);
+    const activeSales = dailySales.filter(isActive);
+    const activeExpenses = expenses.filter(isActive);
+    const activeWaste = wasteRecords.filter(isActive);
+    const activeCash = cashMovements.filter(isActive);
 
-    const totalRevenue = activeDailySales.reduce((total, sale) => {
-      return total + getNumericValue(sale, ["totalAmount", "totalRevenue", "totalSales", "revenue", "amount"]);
-    }, 0);
-
-    const totalExpense = activeExpenses.reduce((total, expense) => {
-      return total + getNumericValue(expense, ["totalAmount", "amount", "price", "cost", "paidAmount"]);
-    }, 0);
-
-    const todayExpense = todayExpenses.reduce((total, expense) => {
-      return total + getNumericValue(expense, ["totalAmount", "amount", "price", "cost", "paidAmount"]);
-    }, 0);
-
-    const fireCost = activeWasteRecords.reduce((total, record) => {
-      return total + getNumericValue(record, ["estimatedCost", "totalAmount", "amount", "cost"]);
-    }, 0);
-
-    const todayFireCost = todayWasteRecords.reduce((total, record) => {
-      return total + getNumericValue(record, ["estimatedCost", "totalAmount", "amount", "cost"]);
-    }, 0);
-
-    const supplierDebt = supplierStatements.reduce((total, statement) => {
-      const remainingDebt = Number(statement.remainingDebt || 0);
-      return remainingDebt > 0 ? total + remainingDebt : total;
-    }, 0);
-
-    const cashManualIn = activeCashMovements
-      .filter((movement) => movement.direction === "IN")
-      .reduce((total, movement) => total + Number(movement.amount || 0), 0);
-
-    const cashManualOut = activeCashMovements
-      .filter((movement) => movement.direction === "OUT")
-      .reduce((total, movement) => total + Number(movement.amount || 0), 0);
-
-    const supplierPaymentOut = activeSupplierPayments.reduce((total, payment) => {
-      return total + Number(payment.amount || 0);
-    }, 0);
-
-    const paidExpenseOut = activeExpenses
-      .filter((expense) => {
-        const paymentStatus = String(expense.paymentStatus || "").toUpperCase();
-
-        return (
-          paymentStatus === "PAID" ||
-          paymentStatus === "ODENDI" ||
-          paymentStatus === "ÖDENDI" ||
-          paymentStatus === "ÖDENDİ"
-        );
-      })
-      .reduce((total, expense) => {
-        return total + getNumericValue(expense, ["totalAmount", "amount", "price", "cost", "paidAmount"]);
+    const todayRevenue = activeSales
+      .filter((item) => sameDay(item.saleDate || item.date || item.createdAt))
+      .reduce((sum, item) => {
+        return sum + amountOf(item, ["totalAmount", "totalRevenue", "totalSales", "revenue", "amount"]);
       }, 0);
 
-    const cashIn = totalRevenue + cashManualIn;
-    const cashOut = cashManualOut + supplierPaymentOut + paidExpenseOut + fireCost;
-    const netCash = cashIn - cashOut;
+    const totalRevenue = activeSales.reduce((sum, item) => {
+      return sum + amountOf(item, ["totalAmount", "totalRevenue", "totalSales", "revenue", "amount"]);
+    }, 0);
 
-    const profit = totalRevenue - totalExpense - fireCost;
+    const totalExpense = activeExpenses.reduce((sum, item) => {
+      return sum + amountOf(item, ["totalAmount", "amount", "price", "cost", "paidAmount"]);
+    }, 0);
+
+    const wasteCost = activeWaste.reduce((sum, item) => {
+      return sum + amountOf(item, ["estimatedCost", "totalAmount", "amount", "cost"]);
+    }, 0);
+
+    const supplierDebt = supplierStatements.reduce((sum, item) => {
+      const debt = Number(item.remainingDebt || 0);
+
+      return debt > 0 ? sum + debt : sum;
+    }, 0);
+
+    const manualCashIn = activeCash
+      .filter((item) => item.direction === "IN")
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    const manualCashOut = activeCash
+      .filter((item) => item.direction === "OUT")
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
+
+    const netCash = totalRevenue + manualCashIn - manualCashOut - totalExpense - wasteCost;
+    const netResult = totalRevenue - totalExpense - wasteCost;
+
+    const lowStock = inventoryItems.filter((item) => {
+      return Number(item.minStock || 0) > 0 &&
+        Number(item.currentStock || 0) <= Number(item.minStock || 0);
+    });
+
+    const pendingOrders = purchaseOrders.filter((item) => {
+      const status = String(item.status || "").toUpperCase();
+
+      return (
+        status !== "CANCELLED" &&
+        status !== "APPROVED" &&
+        (!item.expenseCreated || !item.stockMovementCreated)
+      );
+    });
 
     return {
       todayRevenue,
-      todayExpense,
-      todayFireCost,
       totalRevenue,
       totalExpense,
-      fireCost,
+      wasteCost,
       supplierDebt,
-      cashIn,
-      cashOut,
       netCash,
-      profit,
+      netResult,
+      lowStock,
+      pendingOrders,
     };
   }, [
-    activeDailySales,
-    activeExpenses,
-    activeWasteRecords,
-    activeCashMovements,
-    activeSupplierPayments,
+    dailySales,
+    expenses,
     supplierStatements,
-    todaySales,
-    todayExpenses,
-    todayWasteRecords,
+    inventoryItems,
+    purchaseOrders,
+    wasteRecords,
+    cashMovements,
   ]);
-
-  const lowStockItems = useMemo(() => {
-    return inventoryItems
-      .filter((item) => {
-        return (
-          Number(item.minStock || 0) > 0 &&
-          Number(item.currentStock || 0) <= Number(item.minStock || 0)
-        );
-      })
-      .sort((a, b) => Number(a.currentStock || 0) - Number(b.currentStock || 0));
-  }, [inventoryItems]);
-
-  const pendingPurchaseOrders = useMemo(() => {
-    return purchaseOrders
-      .filter((order) => {
-        const status = String(order.status || "").toUpperCase();
-
-        return (
-          status !== "CANCELLED" &&
-          status !== "APPROVED" &&
-          (!order.expenseCreated || !order.stockMovementCreated)
-        );
-      })
-      .sort((a, b) => new Date(b.orderDate || b.createdAt || 0) - new Date(a.orderDate || a.createdAt || 0));
-  }, [purchaseOrders]);
-
-  const topSupplierDebts = useMemo(() => {
-    return supplierStatements
-      .filter((statement) => Number(statement.remainingDebt || 0) > 0)
-      .sort((a, b) => Number(b.remainingDebt || 0) - Number(a.remainingDebt || 0))
-      .slice(0, 5);
-  }, [supplierStatements]);
-
-  const latestCashRows = useMemo(() => {
-    const manualRows = activeCashMovements.map((movement) => ({
-      id: "cash-" + movement.id,
-      date: getRecordDate(movement),
-      type: movement.direction === "IN" ? "Manuel Giriş" : "Manuel Çıkış",
-      title: movement.title || "Kasa hareketi",
-      amount: Number(movement.amount || 0),
-      direction: movement.direction === "OUT" ? "OUT" : "IN",
-    }));
-
-    const paymentRows = activeSupplierPayments.map((payment) => ({
-      id: "payment-" + payment.id,
-      date: getRecordDate(payment),
-      type: "Tedarikçi Ödemesi",
-      title: payment.supplierName || payment.supplier?.name || "Tedarikçi",
-      amount: Number(payment.amount || 0),
-      direction: "OUT",
-    }));
-
-    const saleRows = activeDailySales.map((sale) => ({
-      id: "sale-" + sale.id,
-      date: getRecordDate(sale),
-      type: "Günlük Ciro",
-      title: sale.title || "Günlük Ciro",
-      amount: getNumericValue(sale, ["totalAmount", "totalRevenue", "totalSales", "revenue", "amount"]),
-      direction: "IN",
-    }));
-
-    return [...manualRows, ...paymentRows, ...saleRows]
-      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
-      .slice(0, 10);
-  }, [activeCashMovements, activeSupplierPayments, activeDailySales]);
-
-  const latestStockRows = useMemo(() => {
-    return stockMovements
-      .slice()
-      .sort((a, b) => new Date(b.movementDate || b.createdAt || 0) - new Date(a.movementDate || a.createdAt || 0))
-      .slice(0, 8);
-  }, [stockMovements]);
 
   const alerts = useMemo(() => {
     const list = [];
 
-    if (lowStockItems.length > 0) {
+    if (report.todayRevenue === 0) {
       list.push({
-        title: "Düşük stok var",
-        description: `${lowStockItems.length} stok kartı minimum seviyede veya altında.`,
-        level: "Kritik",
+        title: "Bugünkü ciro girilmemiş olabilir",
+        text: "Günlük Ciro ekranından bugünün satışını ekle.",
+        page: "Günlük Ciro / Gelir Girişi",
       });
     }
 
-    if (pendingPurchaseOrders.length > 0) {
+    if (report.lowStock.length > 0) {
       list.push({
-        title: "Bekleyen satın alma talebi var",
-        description: `${pendingPurchaseOrders.length} talep gider veya stok aktarımı bekliyor.`,
-        level: "Uyarı",
+        title: "Düşük stok uyarısı",
+        text: `${report.lowStock.length} ürün minimum stok seviyesinde veya altında.`,
+        page: "Stok Yönetimi",
+      });
+    }
+
+    if (report.pendingOrders.length > 0) {
+      list.push({
+        title: "Bekleyen satın alma talebi",
+        text: `${report.pendingOrders.length} talep gider veya stok aktarımı bekliyor.`,
+        page: "Satın Alma Talepleri",
       });
     }
 
     if (report.supplierDebt > 0) {
       list.push({
-        title: "Açık tedarikçi borcu var",
-        description: `Toplam açık borç: ${formatMoney(report.supplierDebt)}.`,
-        level: "Finans",
+        title: "Açık tedarikçi borcu",
+        text: `Toplam açık bakiye: ${money(report.supplierDebt)}.`,
+        page: "Tedarikçi Cari / Borç Takibi",
       });
     }
 
-    if (report.todayRevenue === 0) {
+    if (report.netResult < 0) {
       list.push({
-        title: "Bugünkü ciro girilmemiş olabilir",
-        description: "Günlük Ciro / Gelir Girişi ekranından bugünün cirosunu ekle.",
-        level: "Hatırlatma",
-      });
-    }
-
-    if (report.netCash < 0) {
-      list.push({
-        title: "Net nakit negatif",
-        description: `Net nakit: ${formatMoney(report.netCash)}.`,
-        level: "Kritik",
+        title: "Kâr zarar sonucu negatif",
+        text: `Net sonuç: ${money(report.netResult)}.`,
+        page: "Kâr Zarar",
       });
     }
 
     return list;
-  }, [lowStockItems, pendingPurchaseOrders, report]);
+  }, [report]);
+
+  const topDebts = supplierStatements
+    .filter((item) => Number(item.remainingDebt || 0) > 0)
+    .sort((a, b) => Number(b.remainingDebt || 0) - Number(a.remainingDebt || 0))
+    .slice(0, 5);
+
+  const lowStockRows = report.lowStock
+    .slice()
+    .sort((a, b) => Number(a.currentStock || 0) - Number(b.currentStock || 0))
+    .slice(0, 6);
 
   return (
     <div className="page">
-      <div className="hero">
-        <div className="hero-content">
+      <div
+        style={{
+          background: "linear-gradient(135deg, #111827 0%, #312e81 50%, #111827 100%)",
+          color: "#ffffff",
+          borderRadius: 28,
+          padding: 28,
+          boxShadow: "0 24px 70px rgba(15,23,42,0.25)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 24,
+            alignItems: "center",
+          }}
+        >
           <div>
-            <p className="eyebrow">HandsOff / {user.restaurantName}</p>
+            <p
+              style={{
+                margin: 0,
+                opacity: 0.75,
+                fontWeight: 800,
+                letterSpacing: 1,
+                textTransform: "uppercase",
+                fontSize: 12,
+              }}
+            >
+              HandsOff / {user.restaurantName}
+            </p>
 
-            <h1>Yönetim Özeti / Dashboard</h1>
+            <h1 style={{ margin: "10px 0 8px", fontSize: 34 }}>
+              Yönetim Özeti
+            </h1>
 
-            <p>
-              Ciro, gider, nakit, tedarikçi borcu, stok uyarıları ve bekleyen
-              satın alma taleplerini tek ekranda gösterir.
+            <p style={{ margin: 0, opacity: 0.82, maxWidth: 760 }}>
+              Bugünkü ciro, net nakit, kâr-zarar, tedarikçi borçları, stok
+              uyarıları ve bekleyen satın alma taleplerini tek ekrandan takip et.
             </p>
           </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button className="hero-button" type="button" onClick={fetchDashboardData}>
-              Yenile
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <button className="hero-button" type="button" onClick={fetchDashboard}>
+              {loading ? "Yükleniyor..." : "Yenile"}
             </button>
 
             <button
               className="hero-button"
               type="button"
-              onClick={() =>
-                window.dispatchEvent(
-                  new CustomEvent("handsoff:navigate", {
-                    detail: "Veri Yedekleme / Dışa Aktarma",
-                  })
-                )
-              }
-              style={{ background: "#166534" }}
+              onClick={() => goTo("Ayarlar / Restoran Bilgileri")}
+              style={{ background: "#ffffff", color: "#111827" }}
             >
-              Veri Yedekle
+              Ayarlar
             </button>
 
             <button
               className="hero-button"
               type="button"
-              onClick={() =>
-                window.dispatchEvent(
-                  new CustomEvent("handsoff:navigate", {
-                    detail: "Sistem Sağlık Kontrolü",
-                  })
-                )
-              }
-              style={{ background: "#1d4ed8" }}
+              onClick={() => goTo("Veri Yedekleme / Dışa Aktarma")}
+              style={{ background: "#16a34a" }}
             >
-              Sistem Kontrol
+              Yedek Al
             </button>
           </div>
         </div>
@@ -521,26 +402,26 @@ export default function ExecutiveDashboardPage({ user }) {
       >
         <div className="stat-card">
           <p>Bugünkü Ciro</p>
-          <h3>{formatMoney(report.todayRevenue)}</h3>
-          <span>{todaySales.length} ciro kaydı</span>
+          <h3>{money(report.todayRevenue)}</h3>
+          <span>Günlük satış girişi</span>
         </div>
 
         <div className="stat-card">
           <p>Net Nakit</p>
-          <h3>{formatMoney(report.netCash)}</h3>
-          <span>Giriş {formatMoney(report.cashIn)} / Çıkış {formatMoney(report.cashOut)}</span>
+          <h3>{money(report.netCash)}</h3>
+          <span>Gelir - çıkışlar</span>
         </div>
 
         <div className="stat-card">
           <p>Kâr / Zarar</p>
-          <h3>{formatMoney(report.profit)}</h3>
+          <h3>{money(report.netResult)}</h3>
           <span>Gelir - gider - fire</span>
         </div>
 
         <div className="stat-card">
           <p>Açık Tedarikçi Borcu</p>
-          <h3>{formatMoney(report.supplierDebt)}</h3>
-          <span>{topSupplierDebts.length} öncelikli tedarikçi</span>
+          <h3>{money(report.supplierDebt)}</h3>
+          <span>Cari bakiye</span>
         </div>
       </div>
 
@@ -553,40 +434,35 @@ export default function ExecutiveDashboardPage({ user }) {
       >
         <div className="stat-card">
           <p>Toplam Gelir</p>
-          <h3>{formatMoney(report.totalRevenue)}</h3>
-          <span>Aktif ciro kayıtları</span>
+          <h3>{money(report.totalRevenue)}</h3>
+          <span>Tüm aktif ciro kayıtları</span>
         </div>
 
         <div className="stat-card">
           <p>Toplam Gider</p>
-          <h3>{formatMoney(report.totalExpense)}</h3>
+          <h3>{money(report.totalExpense)}</h3>
           <span>İptal kayıtlar hariç</span>
         </div>
 
         <div className="stat-card">
           <p>Fire Maliyeti</p>
-          <h3>{formatMoney(report.fireCost)}</h3>
-          <span>Bugün: {formatMoney(report.todayFireCost)}</span>
+          <h3>{money(report.wasteCost)}</h3>
+          <span>Zayi / kırılma toplamı</span>
         </div>
 
         <div className="stat-card">
           <p>Düşük Stok</p>
-          <h3>{lowStockItems.length}</h3>
-          <span>{inventoryItems.length} stok kartı içinde</span>
+          <h3>{report.lowStock.length}</h3>
+          <span>Minimum seviyedeki ürünler</span>
         </div>
       </div>
 
       <div className="panel">
         <div className="panel-head">
           <div>
-            <h2>Hızlı Modül Geçişleri</h2>
-
-            <p className="panel-sub">
-              Yeni eklenen operasyon, finans, stok ve sistem ekranlarına buradan geç.
-            </p>
+            <h2>Hızlı İşlemler</h2>
+            <p className="panel-sub">En sık kullanılacak yönetim ekranları.</p>
           </div>
-
-          <span className="mini-pill">{quickModules.length} modül</span>
         </div>
 
         <div
@@ -596,11 +472,11 @@ export default function ExecutiveDashboardPage({ user }) {
             gap: 14,
           }}
         >
-          {quickModules.map((module) => (
+          {moduleCards.map((card) => (
             <button
-              key={module.page}
+              key={card.page}
               type="button"
-              onClick={() => goToModule(module.page)}
+              onClick={() => goTo(card.page)}
               style={{
                 textAlign: "left",
                 border: "1px solid #e5e7eb",
@@ -608,7 +484,7 @@ export default function ExecutiveDashboardPage({ user }) {
                 borderRadius: 18,
                 padding: 18,
                 cursor: "pointer",
-                boxShadow: "0 12px 30px rgba(15, 23, 42, 0.06)",
+                boxShadow: "0 12px 30px rgba(15,23,42,0.06)",
               }}
             >
               <strong
@@ -619,7 +495,7 @@ export default function ExecutiveDashboardPage({ user }) {
                   marginBottom: 8,
                 }}
               >
-                {module.title}
+                {card.title}
               </strong>
 
               <span
@@ -630,7 +506,7 @@ export default function ExecutiveDashboardPage({ user }) {
                   lineHeight: 1.5,
                 }}
               >
-                {module.description}
+                {card.text}
               </span>
             </button>
           ))}
@@ -640,10 +516,9 @@ export default function ExecutiveDashboardPage({ user }) {
       <div className="panel">
         <div className="panel-head">
           <div>
-            <h2>Uyarılar</h2>
-
+            <h2>Yönetim Uyarıları</h2>
             <p className="panel-sub">
-              Yönetimde önce bakılması gereken kritik başlıklar.
+              Öncelikli bakılması gereken finans ve operasyon başlıkları.
             </p>
           </div>
 
@@ -653,9 +528,9 @@ export default function ExecutiveDashboardPage({ user }) {
         <table className="module-table">
           <thead>
             <tr>
-              <th>Seviye</th>
               <th>Başlık</th>
               <th>Açıklama</th>
+              <th>Aksiyon</th>
             </tr>
           </thead>
 
@@ -665,11 +540,15 @@ export default function ExecutiveDashboardPage({ user }) {
                 <td colSpan="3">Şu an kritik uyarı yok.</td>
               </tr>
             ) : (
-              alerts.map((alert, index) => (
-                <tr key={index}>
-                  <td>{alert.level}</td>
+              alerts.map((alert) => (
+                <tr key={alert.title}>
                   <td>{alert.title}</td>
-                  <td>{alert.description}</td>
+                  <td>{alert.text}</td>
+                  <td>
+                    <button type="button" onClick={() => goTo(alert.page)}>
+                      Aç
+                    </button>
+                  </td>
                 </tr>
               ))
             )}
@@ -688,32 +567,28 @@ export default function ExecutiveDashboardPage({ user }) {
           <div className="panel-head">
             <div>
               <h2>Düşük Stoklar</h2>
-
-              <p className="panel-sub">
-                Minimum stok seviyesine gelen ürünler.
-              </p>
+              <p className="panel-sub">Minimum stok seviyesine gelen ürünler.</p>
             </div>
 
-            <span className="mini-pill">{lowStockItems.length} ürün</span>
+            <span className="mini-pill">{lowStockRows.length} ürün</span>
           </div>
 
           <table className="module-table">
             <thead>
               <tr>
-                <th>Stok</th>
+                <th>Ürün</th>
                 <th>Mevcut</th>
                 <th>Minimum</th>
-                <th>Kategori</th>
               </tr>
             </thead>
 
             <tbody>
-              {lowStockItems.length === 0 ? (
+              {lowStockRows.length === 0 ? (
                 <tr>
-                  <td colSpan="4">Düşük stok yok.</td>
+                  <td colSpan="3">Düşük stok yok.</td>
                 </tr>
               ) : (
-                lowStockItems.slice(0, 8).map((item) => (
+                lowStockRows.map((item) => (
                   <tr key={item.id}>
                     <td>{item.name}</td>
                     <td>
@@ -722,7 +597,6 @@ export default function ExecutiveDashboardPage({ user }) {
                     <td>
                       {item.minStock} {item.unit}
                     </td>
-                    <td>{item.category}</td>
                   </tr>
                 ))
               )}
@@ -733,127 +607,31 @@ export default function ExecutiveDashboardPage({ user }) {
         <div className="panel">
           <div className="panel-head">
             <div>
-              <h2>Bekleyen Satın Alma Talepleri</h2>
-
-              <p className="panel-sub">
-                Gider veya stok aktarımı tamamlanmamış talepler.
-              </p>
+              <h2>Öncelikli Tedarikçi Borçları</h2>
+              <p className="panel-sub">Açık caride en yüksek bakiyeler.</p>
             </div>
 
-            <span className="mini-pill">{pendingPurchaseOrders.length} talep</span>
-          </div>
-
-          <table className="module-table">
-            <thead>
-              <tr>
-                <th>Tarih</th>
-                <th>Tedarikçi</th>
-                <th>Ürün</th>
-                <th>Tutar</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {pendingPurchaseOrders.length === 0 ? (
-                <tr>
-                  <td colSpan="4">Bekleyen talep yok.</td>
-                </tr>
-              ) : (
-                pendingPurchaseOrders.slice(0, 8).map((order) => (
-                  <tr key={order.id}>
-                    <td>{formatDate(order.orderDate || order.createdAt)}</td>
-                    <td>{order.supplierName || "-"}</td>
-                    <td>{order.itemName || "-"}</td>
-                    <td>{formatMoney(order.totalAmount)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-          gap: 18,
-        }}
-      >
-        <div className="panel">
-          <div className="panel-head">
-            <div>
-              <h2>En Yüksek Tedarikçi Borçları</h2>
-
-              <p className="panel-sub">
-                Ödeme önceliği verebileceğin açık cari bakiyeler.
-              </p>
-            </div>
+            <span className="mini-pill">{topDebts.length} tedarikçi</span>
           </div>
 
           <table className="module-table">
             <thead>
               <tr>
                 <th>Tedarikçi</th>
-                <th>Toplam Gider</th>
                 <th>Kalan Borç</th>
               </tr>
             </thead>
 
             <tbody>
-              {topSupplierDebts.length === 0 ? (
+              {topDebts.length === 0 ? (
                 <tr>
-                  <td colSpan="3">Açık tedarikçi borcu yok.</td>
+                  <td colSpan="2">Açık tedarikçi borcu yok.</td>
                 </tr>
               ) : (
-                topSupplierDebts.map((statement) => (
-                  <tr key={statement.key}>
-                    <td>{statement.supplierName}</td>
-                    <td>{formatMoney(statement.totalExpense)}</td>
-                    <td>{formatMoney(statement.remainingDebt)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="panel">
-          <div className="panel-head">
-            <div>
-              <h2>Son Nakit Hareketleri</h2>
-
-              <p className="panel-sub">
-                Ciro, kasa hareketi ve tedarikçi ödemelerinden oluşur.
-              </p>
-            </div>
-          </div>
-
-          <table className="module-table">
-            <thead>
-              <tr>
-                <th>Tarih</th>
-                <th>Tip</th>
-                <th>Açıklama</th>
-                <th>Tutar</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {latestCashRows.length === 0 ? (
-                <tr>
-                  <td colSpan="4">Henüz nakit hareketi yok.</td>
-                </tr>
-              ) : (
-                latestCashRows.map((row) => (
-                  <tr key={row.id}>
-                    <td>{formatDateTime(row.date)}</td>
-                    <td>{row.type}</td>
-                    <td>{row.title}</td>
-                    <td>
-                      {row.direction === "OUT" ? "-" : "+"}
-                      {formatMoney(row.amount)}
-                    </td>
+                topDebts.map((item) => (
+                  <tr key={item.key || item.supplierName}>
+                    <td>{item.supplierName}</td>
+                    <td>{money(item.remainingDebt)}</td>
                   </tr>
                 ))
               )}
@@ -865,46 +643,37 @@ export default function ExecutiveDashboardPage({ user }) {
       <div className="panel">
         <div className="panel-head">
           <div>
-            <h2>Son Stok Hareketleri</h2>
-
+            <h2>Bekleyen Satın Alma Talepleri</h2>
             <p className="panel-sub">
-              Satın alma, stok sayımı ve zayi/kırılma hareketleri.
+              Gider veya stok aktarımı tamamlanmamış talepler.
             </p>
           </div>
 
-          <span className="mini-pill">{latestStockRows.length} hareket</span>
+          <span className="mini-pill">{report.pendingOrders.length} talep</span>
         </div>
 
         <table className="module-table">
           <thead>
             <tr>
               <th>Tarih</th>
-              <th>Stok</th>
-              <th>Tip</th>
-              <th>Miktar</th>
-              <th>Kaynak</th>
+              <th>Tedarikçi</th>
+              <th>Ürün</th>
+              <th>Tutar</th>
             </tr>
           </thead>
 
           <tbody>
-            {loading ? (
+            {report.pendingOrders.length === 0 ? (
               <tr>
-                <td colSpan="5">Dashboard yükleniyor...</td>
-              </tr>
-            ) : latestStockRows.length === 0 ? (
-              <tr>
-                <td colSpan="5">Henüz stok hareketi yok.</td>
+                <td colSpan="4">Bekleyen talep yok.</td>
               </tr>
             ) : (
-              latestStockRows.map((movement) => (
-                <tr key={movement.id}>
-                  <td>{formatDateTime(movement.movementDate || movement.createdAt)}</td>
-                  <td>{movement.inventoryItem?.name || "-"}</td>
-                  <td>{movement.type}</td>
-                  <td>
-                    {movement.quantity} {movement.unit}
-                  </td>
-                  <td>{movement.source}</td>
+              report.pendingOrders.slice(0, 8).map((item) => (
+                <tr key={item.id}>
+                  <td>{dateText(item.orderDate || item.createdAt)}</td>
+                  <td>{item.supplierName || "-"}</td>
+                  <td>{item.itemName || "-"}</td>
+                  <td>{money(item.totalAmount)}</td>
                 </tr>
               ))
             )}

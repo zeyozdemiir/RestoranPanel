@@ -16,62 +16,6 @@ import BackupExportPage from "./BackupExportPage";
 import SystemHealthPage from "./SystemHealthPage";
 import UserRolesPage from "./UserRolesPage";
 import DailyClosingReportPage from "./DailyClosingReportPage";
-import MonthlyManagementReportPage from "./MonthlyManagementReportPage";
-import ReportCenterPage from "./ReportCenterPage";
-import DailyChecklistPage from "./DailyChecklistPage";
-import ActionPlanPage from "./ActionPlanPage";
-
-function isActionPlanPage(activePage) {
-  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
-
-  return (
-    page.includes("aksiyon") ||
-    page.includes("görev takip") ||
-    page.includes("gorev takip") ||
-    page.includes("yönetim görev") ||
-    page.includes("yonetim gorev") ||
-    page.includes("action plan")
-  );
-}
-
-
-function isDailyChecklistPage(activePage) {
-  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
-
-  return (
-    page.includes("günlük kontrol listesi") ||
-    page.includes("gunluk kontrol listesi") ||
-    page.includes("kontrol listesi") ||
-    page.includes("checklist")
-  );
-}
-
-
-function isReportCenterPage(activePage) {
-  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
-
-  return (
-    page.includes("rapor merkezi") ||
-    page.includes("yönetim raporları") ||
-    page.includes("yonetim raporlari") ||
-    page.includes("report center")
-  );
-}
-
-
-function isMonthlyManagementReportPage(activePage) {
-  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
-
-  return (
-    page.includes("aylık") ||
-    page.includes("aylik") ||
-    page.includes("ay raporu") ||
-    page.includes("aylık yönetim") ||
-    page.includes("aylik yonetim") ||
-    page.includes("monthly")
-  );
-}
-
 
 function isDailyClosingReportPage(activePage) {
   const page = String(activePage || "").toLocaleLowerCase("tr-TR");
@@ -2046,14 +1990,6 @@ return (
           <SystemHealthPage user={user} />
         ) : isBackupExportPage(activePage) ? (
           <BackupExportPage user={user} />
-        ) : isActionPlanPage(activePage) ? (
-          <ActionPlanPage user={user} />
-        ) : isDailyChecklistPage(activePage) ? (
-          <DailyChecklistPage user={user} />
-        ) : isReportCenterPage(activePage) ? (
-          <ReportCenterPage user={user} />
-        ) : isMonthlyManagementReportPage(activePage) ? (
-          <MonthlyManagementReportPage user={user} />
         ) : isDailyClosingReportPage(activePage) ? (
           <DailyClosingReportPage user={user} />
         ) : isExecutiveDashboardPage(activePage) ? (

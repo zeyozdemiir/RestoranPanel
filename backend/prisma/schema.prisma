@@ -409,3 +409,52 @@ model RestaurantSetting {
   updatedAt              DateTime @updatedAt
 }
 
+
+
+model ActionTask {
+  id           Int      @id @default(autoincrement())
+  restaurantId Int
+
+  title        String
+  owner        String?
+  source       String?
+  priority     String   @default("Orta")
+  status       String   @default("Açık")
+  dueDate      String?
+  note         String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+
+model DailyChecklist {
+  id           Int                  @id @default(autoincrement())
+  restaurantId Int
+
+  date         String
+  note         String?
+  status       String               @default("OPEN")
+
+  items        DailyChecklistItem[]
+
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  @@unique([restaurantId, date])
+}
+
+
+model DailyChecklistItem {
+  id           Int            @id @default(autoincrement())
+  checklistId  Int
+  checklist    DailyChecklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  section      String
+  text         String
+  done         Boolean        @default(false)
+  sortOrder    Int            @default(0)
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}

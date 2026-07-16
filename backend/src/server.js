@@ -3622,6 +3622,360 @@ app.put("/api/restaurant-settings", authMiddleware, async (req, res) => {
 });
 
 
+
+
+function handsoffRestaurantId(req) {
+  return req.user?.restaurantId || req.user?.restaurant?.id || req.restaurantId || 1;
+}
+
+app.get("/api/action-tasks", authMiddleware, async (req, res) => {
+  try {
+    const restaurantId = handsoffRestaurantId(req);
+
+    const tasks = await prisma.actionTask.findMany({
+      where: {
+        restaurantId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return res.json({
+      tasks,
+    });
+  } catch (error) {
+    console.error("action-tasks get error:", error);
+
+    return res.status(500).json({
+      message: "Aksiyon görevleri alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/action-tasks", authMiddleware, async (req, res) => {
+  try {
+    const restaurantId = handsoffRestaurantId(req);
+    const body = req.body || {};
+
+    if (!body.title || !String(body.title).trim()) {
+      return res.status(400).json({
+        message: "Görev başlığı zorunludur.",
+      });
+    }
+
+    const task = await prisma.actionTask.create({
+      data: {
+        restaurantId,
+        title: String(body.title).trim(),
+        owner: body.owner ? String(body.owner).trim() : null,
+        source: body.source ? String(body.source).trim() : "Yönetim",
+        priority: body.priority ? String(body.priority).trim() : "Orta",
+        status: body.status ? String(body.status).trim() : "Açık",
+        dueDate: body.dueDate ? String(body.dueDate).slice(0, 10) : null,
+        note: body.note ? String(body.note).trim() : null,
+      },
+    });
+
+    return res.json({
+      message: "Görev eklendi.",
+      task,
+    });
+  } catch (error) {
+    console.error("action-tasks post error:", error);
+
+    return res.status(500).json({
+      message: "Görev eklenemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+app.put("/api/action-tasks/:id", authMiddleware, async (req, res) => {
+  try {
+    const restaurantId = handsoffRestaurantId(req);
+    const id = Number(req.params.id);
+    const body = req.body || {};
+
+    const existingTask = await prisma.actionTask.findFirst({
+      where: {
+        id,
+        restaurantId,
+      },
+    });
+
+    if (!existingTask) {
+      return res.status(404).json({
+        message: "Görev bulunamadı.",
+      });
+    }
+
+    const task = await prisma.actionTask.update({
+      where: {
+        id,
+      },
+      data: {
+        title: body.title !== undefined ? String(body.title).trim() : existingTask.title,
+        owner: body.owner !== undefined ? String(body.owner || "").trim() || null : existingTask.owner,
+        source: body.source !== undefined ? String(body.source || "").trim() || null : existingTask.source,
+        priority: body.priority !== undefined ? String(body.priority).trim() : existingTask.priority,
+        status: body.status !== undefined ? String(body.status).trim() : existingTask.status,
+        dueDate: body.dueDate !== undefined ? String(body.dueDate || "").slice(0, 10) || null : existingTask.dueDate,
+        note: body.note !== undefined ? String(body.note || "").trim() || null : existingTask.note,
+      },
+    });
+
+    return res.json({
+      message: "Görev güncellendi.",
+      task,
+    });
+  } catch (error) {
+    console.error("action-tasks put error:", error);
+
+    return res.status(500).json({
+      message: "Görev güncellenemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+app.delete("/api/action-tasks/:id", authMiddleware, async (req, res) => {
+  try {
+    const restaurantId = handsoffRestaurantId(req);
+    const id = Number(req.params.id);
+
+    const existingTask = await prisma.actionTask.findFirst({
+      where: {
+        id,
+        restaurantId,
+      },
+    });
+
+    if (!existingTask) {
+      return res.status(404).json({
+        message: "Görev bulunamadı.",
+      });
+    }
+
+    await prisma.actionTask.delete({
+      where: {
+        id,
+      },
+    });
+
+    return res.json({
+      message: "Görev silindi.",
+    });
+  } catch (error) {
+    console.error("action-tasks delete error:", error);
+
+    return res.status(500).json({
+      message: "Görev silinemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+
+
+
+const HANDSOFF_DAILY_CHECKLIST_SECTIONS = [
+  {
+    title: "Ciro ve Kasa",
+    items: [
+      "Günlük ciro girişi yapıldı",
+      "Nakit / kart / online satış ayrımı kontrol edildi",
+      "Kasa hareketleri kontrol edildi",
+      "Eksik kasa çıkışı varsa işlendi",
+    ],
+  },
+  {
+    title: "Gider ve Tedarikçi",
+    items: [
+      "Günün giderleri işlendi",
+      "Tedarikçi ödemeleri kontrol edildi",
+      "Açık cari borçlar kontrol edildi",
+      "Satın alma talepleri kontrol edildi",
+    ],
+  },
+  {
+    title: "Stok ve Operasyon",
+    items: [
+      "Düşük stok uyarıları kontrol edildi",
+      "Zayi / kırılma kayıtları işlendi",
+      "Mutfak eksikleri kontrol edildi",
+      "Bar eksikleri kontrol edildi",
+    ],
+  },
+  {
+    title: "Kapanış",
+    items: [
+      "Gün sonu raporu kontrol edildi",
+      "Veri yedeği alındı",
+      "Ertesi gün notları yazıldı",
+    ],
+  },
+];
+
+function buildDailyChecklistDefaultItems() {
+  const items = [];
+  let sortOrder = 0;
+
+  HANDSOFF_DAILY_CHECKLIST_SECTIONS.forEach((section) => {
+    section.items.forEach((text) => {
+      items.push({
+        section: section.title,
+        text,
+        done: false,
+        sortOrder,
+      });
+
+      sortOrder += 1;
+    });
+  });
+
+  return items;
+}
+
+async function getOrCreateDailyChecklist(restaurantId, date) {
+  let checklist = await prisma.dailyChecklist.findUnique({
+    where: {
+      restaurantId_date: {
+        restaurantId,
+        date,
+      },
+    },
+    include: {
+      items: {
+        orderBy: {
+          sortOrder: "asc",
+        },
+      },
+    },
+  });
+
+  if (checklist) {
+    return checklist;
+  }
+
+  checklist = await prisma.dailyChecklist.create({
+    data: {
+      restaurantId,
+      date,
+      note: "",
+      status: "OPEN",
+      items: {
+        create: buildDailyChecklistDefaultItems(),
+      },
+    },
+    include: {
+      items: {
+        orderBy: {
+          sortOrder: "asc",
+        },
+      },
+    },
+  });
+
+  return checklist;
+}
+
+app.get("/api/daily-checklists/:date", authMiddleware, async (req, res) => {
+  try {
+    const restaurantId = handsoffRestaurantId(req);
+    const date = String(req.params.date || "").slice(0, 10);
+
+    if (!date) {
+      return res.status(400).json({
+        message: "Tarih zorunludur.",
+      });
+    }
+
+    const checklist = await getOrCreateDailyChecklist(restaurantId, date);
+
+    return res.json({
+      checklist,
+    });
+  } catch (error) {
+    console.error("daily-checklists get error:", error);
+
+    return res.status(500).json({
+      message: "Günlük kontrol listesi alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.put("/api/daily-checklists/:date", authMiddleware, async (req, res) => {
+  try {
+    const restaurantId = handsoffRestaurantId(req);
+    const date = String(req.params.date || "").slice(0, 10);
+    const body = req.body || {};
+    const items = Array.isArray(body.items) ? body.items : [];
+
+    let checklist = await getOrCreateDailyChecklist(restaurantId, date);
+
+    const updatedChecklist = await prisma.$transaction(async (tx) => {
+      await tx.dailyChecklist.update({
+        where: {
+          id: checklist.id,
+        },
+        data: {
+          note: body.note === undefined || body.note === null ? "" : String(body.note),
+          status: body.status ? String(body.status) : "OPEN",
+        },
+      });
+
+      await tx.dailyChecklistItem.deleteMany({
+        where: {
+          checklistId: checklist.id,
+        },
+      });
+
+      for (let index = 0; index < items.length; index += 1) {
+        const item = items[index];
+
+        await tx.dailyChecklistItem.create({
+          data: {
+            checklistId: checklist.id,
+            section: String(item.section || "Genel"),
+            text: String(item.text || ""),
+            done: Boolean(item.done),
+            sortOrder: Number(item.sortOrder ?? index),
+          },
+        });
+      }
+
+      return tx.dailyChecklist.findUnique({
+        where: {
+          id: checklist.id,
+        },
+        include: {
+          items: {
+            orderBy: {
+              sortOrder: "asc",
+            },
+          },
+        },
+      });
+    });
+
+    return res.json({
+      message: "Günlük kontrol listesi kaydedildi.",
+      checklist: updatedChecklist,
+    });
+  } catch (error) {
+    console.error("daily-checklists put error:", error);
+
+    return res.status(500).json({
+      message: "Günlük kontrol listesi kaydedilemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`HandsOff backend calisiyor: http://localhost:${PORT}`);
 });
