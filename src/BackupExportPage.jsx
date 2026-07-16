@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useState } from "react";
 
 function formatDateTime(value) {
@@ -38,7 +39,7 @@ export default function BackupExportPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/backup/export", {
+      const response = await fetch(API_BASE_URL + "/api/backup/export", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -68,7 +69,7 @@ export default function BackupExportPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/backup/export", {
+      const response = await fetch(API_BASE_URL + "/api/backup/export", {
         headers: {
           Authorization: "Bearer " + token,
         },

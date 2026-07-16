@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function money(value) {
@@ -151,13 +152,13 @@ export default function ExecutiveDashboardPage({ user }) {
         wasteList,
         cashList,
       ] = await Promise.all([
-        safeFetch("http://localhost:4000/api/daily-sales", "dailySales"),
-        safeFetch("http://localhost:4000/api/expenses", "expenses"),
-        safeFetch("http://localhost:4000/api/supplier-statements", null),
-        safeFetch("http://localhost:4000/api/inventory-items", "inventoryItems"),
-        safeFetch("http://localhost:4000/api/purchase-orders", "purchaseOrders"),
-        safeFetch("http://localhost:4000/api/waste-records", "wasteRecords"),
-        safeFetch("http://localhost:4000/api/cash-movements", "cashMovements"),
+        safeFetch(API_BASE_URL + "/api/daily-sales", "dailySales"),
+        safeFetch(API_BASE_URL + "/api/expenses", "expenses"),
+        safeFetch(API_BASE_URL + "/api/supplier-statements", null),
+        safeFetch(API_BASE_URL + "/api/inventory-items", "inventoryItems"),
+        safeFetch(API_BASE_URL + "/api/purchase-orders", "purchaseOrders"),
+        safeFetch(API_BASE_URL + "/api/waste-records", "wasteRecords"),
+        safeFetch(API_BASE_URL + "/api/cash-movements", "cashMovements"),
       ]);
 
       setDailySales(saleList || []);

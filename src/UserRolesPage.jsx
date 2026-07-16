@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 const emptyForm = {
@@ -63,7 +64,7 @@ export default function UserRolesPage({ user }) {
       setError("");
       setMessage("");
 
-      const data = await apiFetch("http://localhost:4000/api/user-roles");
+      const data = await apiFetch(API_BASE_URL + "/api/user-roles");
 
       setUsers(data.users || []);
       setMessage("Kullanıcı rolleri database’den yüklendi.");
@@ -101,7 +102,7 @@ export default function UserRolesPage({ user }) {
 
       if (editingId) {
         const data = await apiFetch(
-          "http://localhost:4000/api/user-roles/" + editingId,
+          API_BASE_URL + "/api/user-roles/" + editingId,
           {
             method: "PUT",
             body: JSON.stringify(form),
@@ -117,7 +118,7 @@ export default function UserRolesPage({ user }) {
         return;
       }
 
-      const data = await apiFetch("http://localhost:4000/api/user-roles", {
+      const data = await apiFetch(API_BASE_URL + "/api/user-roles", {
         method: "POST",
         body: JSON.stringify(form),
       });
@@ -149,7 +150,7 @@ export default function UserRolesPage({ user }) {
 
   async function deleteUser(id) {
     try {
-      await apiFetch("http://localhost:4000/api/user-roles/" + id, {
+      await apiFetch(API_BASE_URL + "/api/user-roles/" + id, {
         method: "DELETE",
       });
 
@@ -170,7 +171,7 @@ export default function UserRolesPage({ user }) {
     if (!currentUser) return;
 
     try {
-      const data = await apiFetch("http://localhost:4000/api/user-roles/" + id, {
+      const data = await apiFetch(API_BASE_URL + "/api/user-roles/" + id, {
         method: "PUT",
         body: JSON.stringify({
           ...currentUser,

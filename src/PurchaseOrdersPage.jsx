@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function formatMoney(value) {
@@ -132,7 +133,7 @@ export default function PurchaseOrdersPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/purchase-orders", {
+      const response = await fetch(API_BASE_URL + "/api/purchase-orders", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -157,7 +158,7 @@ export default function PurchaseOrdersPage({ user }) {
     try {
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/suppliers", {
+      const response = await fetch(API_BASE_URL + "/api/suppliers", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -252,8 +253,8 @@ export default function PurchaseOrdersPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const url = selectedOrder
-        ? `http://localhost:4000/api/purchase-orders/${selectedOrder.id}`
-        : "http://localhost:4000/api/purchase-orders";
+        ? API_BASE_URL + `/api/purchase-orders/${selectedOrder.id}`
+        : API_BASE_URL + "/api/purchase-orders";
 
       const method = selectedOrder ? "PUT" : "POST";
 
@@ -307,7 +308,7 @@ export default function PurchaseOrdersPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/purchase-orders/${order.id}`,
+        API_BASE_URL + `/api/purchase-orders/${order.id}`,
         {
           method: "PUT",
           headers: {
@@ -358,7 +359,7 @@ export default function PurchaseOrdersPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/purchase-orders/${order.id}/create-stock-movement`,
+        API_BASE_URL + `/api/purchase-orders/${order.id}/create-stock-movement`,
         {
           method: "POST",
           headers: {
@@ -400,7 +401,7 @@ export default function PurchaseOrdersPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/purchase-orders/${order.id}/create-expense`,
+        API_BASE_URL + `/api/purchase-orders/${order.id}/create-expense`,
         {
           method: "POST",
           headers: {

@@ -10,10 +10,6 @@ const menuGroups = [
         permission: "canViewReports",
       },
       {
-        label: "Yetki Durumu",
-        permission: "self",
-      },
-      {
         label: "Rapor Merkezi",
         permission: "canViewReports",
       },
@@ -180,10 +176,6 @@ function canSeeItem(member, permission) {
   }
 
   if (member.role === "OWNER") {
-    return true;
-  }
-
-  if (permission === "self") {
     return true;
   }
 

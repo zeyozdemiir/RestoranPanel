@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function formatDate(value) {
@@ -90,7 +91,7 @@ export default function SuppliersPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/suppliers", {
+      const response = await fetch(API_BASE_URL + "/api/suppliers", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -115,7 +116,7 @@ export default function SuppliersPage({ user }) {
     try {
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/expenses", {
+      const response = await fetch(API_BASE_URL + "/api/expenses", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -182,8 +183,8 @@ export default function SuppliersPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const url = selectedSupplier
-        ? `http://localhost:4000/api/suppliers/${selectedSupplier.id}`
-        : "http://localhost:4000/api/suppliers";
+        ? API_BASE_URL + `/api/suppliers/${selectedSupplier.id}`
+        : API_BASE_URL + "/api/suppliers";
 
       const method = selectedSupplier ? "PUT" : "POST";
 
@@ -252,7 +253,7 @@ export default function SuppliersPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/suppliers/${supplier.id}`,
+        API_BASE_URL + `/api/suppliers/${supplier.id}`,
         {
           method: "PUT",
           headers: {

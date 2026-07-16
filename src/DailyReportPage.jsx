@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useState } from "react";
 
 export default function DailyReportPage({ user }) {
@@ -19,7 +20,7 @@ export default function DailyReportPage({ user }) {
     try {
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/daily-reports", {
+      const response = await fetch(API_BASE_URL + "/api/daily-reports", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -64,7 +65,7 @@ export default function DailyReportPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/daily-reports", {
+      const response = await fetch(API_BASE_URL + "/api/daily-reports", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

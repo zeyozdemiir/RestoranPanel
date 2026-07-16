@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 const roleLabels = {
@@ -80,7 +81,7 @@ export default function PermissionStatusPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/user-roles", {
+      const response = await fetch(API_BASE_URL + "/api/user-roles", {
         headers: {
           Authorization: "Bearer " + token,
         },

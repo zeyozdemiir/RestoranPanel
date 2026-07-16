@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function formatMoney(value) {
@@ -179,15 +180,15 @@ export default function CashFlowPage({ user }) {
         reportList,
         cashMovementList,
       ] = await Promise.all([
-        safeFetchArray("http://localhost:4000/api/expenses", "expenses"),
+        safeFetchArray(API_BASE_URL + "/api/expenses", "expenses"),
         safeFetchArray(
-          "http://localhost:4000/api/supplier-payments",
+          API_BASE_URL + "/api/supplier-payments",
           "supplierPayments"
         ),
-        safeFetchArray("http://localhost:4000/api/waste-records", "wasteRecords"),
-        safeFetchArray("http://localhost:4000/api/sales", "sales"),
-        safeFetchArray("http://localhost:4000/api/daily-reports", "dailyReports"),
-        safeFetchArray("http://localhost:4000/api/cash-movements", "cashMovements"),
+        safeFetchArray(API_BASE_URL + "/api/waste-records", "wasteRecords"),
+        safeFetchArray(API_BASE_URL + "/api/sales", "sales"),
+        safeFetchArray(API_BASE_URL + "/api/daily-reports", "dailyReports"),
+        safeFetchArray(API_BASE_URL + "/api/cash-movements", "cashMovements"),
       ]);
 
       setExpenses(expenseList);
@@ -241,7 +242,7 @@ export default function CashFlowPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/cash-movements", {
+      const response = await fetch(API_BASE_URL + "/api/cash-movements", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -287,7 +288,7 @@ export default function CashFlowPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/cash-movements/${row.sourceId}/cancel`,
+        API_BASE_URL + `/api/cash-movements/${row.sourceId}/cancel`,
         {
           method: "PUT",
           headers: {

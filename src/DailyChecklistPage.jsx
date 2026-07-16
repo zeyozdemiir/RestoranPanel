@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function today() {
@@ -37,7 +38,7 @@ export default function DailyChecklistPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        "http://localhost:4000/api/daily-checklists/" + selectedDate,
+        API_BASE_URL + "/api/daily-checklists/" + selectedDate,
         {
           headers: {
             Authorization: "Bearer " + token,
@@ -71,7 +72,7 @@ export default function DailyChecklistPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        "http://localhost:4000/api/daily-checklists/" + selectedDate,
+        API_BASE_URL + "/api/daily-checklists/" + selectedDate,
         {
           method: "PUT",
           headers: {

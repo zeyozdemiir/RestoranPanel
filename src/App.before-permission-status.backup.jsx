@@ -14,6 +14,93 @@ import DailySalesPage from "./DailySalesPage";
 import ExecutiveDashboardPage from "./ExecutiveDashboardPage";
 import BackupExportPage from "./BackupExportPage";
 import SystemHealthPage from "./SystemHealthPage";
+import UserRolesPage from "./UserRolesPage";
+import DailyClosingReportPage from "./DailyClosingReportPage";
+import MonthlyManagementReportPage from "./MonthlyManagementReportPage";
+import ReportCenterPage from "./ReportCenterPage";
+import DailyChecklistPage from "./DailyChecklistPage";
+import ActionPlanPage from "./ActionPlanPage";
+import { API_BASE_URL } from "./apiConfig";
+
+function isActionPlanPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("aksiyon") ||
+    page.includes("görev takip") ||
+    page.includes("gorev takip") ||
+    page.includes("yönetim görev") ||
+    page.includes("yonetim gorev") ||
+    page.includes("action plan")
+  );
+}
+
+
+function isDailyChecklistPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("günlük kontrol listesi") ||
+    page.includes("gunluk kontrol listesi") ||
+    page.includes("kontrol listesi") ||
+    page.includes("checklist")
+  );
+}
+
+
+function isReportCenterPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("rapor merkezi") ||
+    page.includes("yönetim raporları") ||
+    page.includes("yonetim raporlari") ||
+    page.includes("report center")
+  );
+}
+
+
+function isMonthlyManagementReportPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("aylık") ||
+    page.includes("aylik") ||
+    page.includes("ay raporu") ||
+    page.includes("aylık yönetim") ||
+    page.includes("aylik yonetim") ||
+    page.includes("monthly")
+  );
+}
+
+
+function isDailyClosingReportPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("gün sonu") ||
+    page.includes("gun sonu") ||
+    page.includes("kapanış") ||
+    page.includes("kapanis") ||
+    page.includes("closing")
+  );
+}
+
+
+function isUserRolesPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("kullanıcı rol") ||
+    page.includes("kullanici rol") ||
+    page.includes("yetki") ||
+    page.includes("yetkilendirme") ||
+    page.includes("roller") ||
+    page.includes("roles") ||
+    page.includes("permission")
+  );
+}
+
 
 function isSystemHealthPage(activePage) {
   const page = String(activePage || "").toLocaleLowerCase("tr-TR");
@@ -1347,7 +1434,7 @@ function LoginScreen({ onLogin }) {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:4000/api/auth/login", {
+      const response = await fetch(API_BASE_URL + "/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1575,7 +1662,7 @@ function Dashboard({ user }) {
           return;
         }
 
-        const response = await fetch("http://localhost:4000/api/dashboard/summary", {
+        const response = await fetch(API_BASE_URL + "/api/dashboard/summary", {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -1960,6 +2047,16 @@ return (
           <SystemHealthPage user={user} />
         ) : isBackupExportPage(activePage) ? (
           <BackupExportPage user={user} />
+        ) : isActionPlanPage(activePage) ? (
+          <ActionPlanPage user={user} />
+        ) : isDailyChecklistPage(activePage) ? (
+          <DailyChecklistPage user={user} />
+        ) : isReportCenterPage(activePage) ? (
+          <ReportCenterPage user={user} />
+        ) : isMonthlyManagementReportPage(activePage) ? (
+          <MonthlyManagementReportPage user={user} />
+        ) : isDailyClosingReportPage(activePage) ? (
+          <DailyClosingReportPage user={user} />
         ) : isExecutiveDashboardPage(activePage) ? (
           <ExecutiveDashboardPage user={user} />
         ) : isDailySalesPage(activePage) ? (
@@ -1975,7 +2072,11 @@ return (
         ) : isInventoryPage(activePage) ? (
           <InventoryPage user={user} />
         ) : (
+          isUserRolesPage(activePage) ? (
+          <UserRolesPage user={user} />
+        ) : (
           <ModulePage title={activePage} />
+        )
         )
         )
         )

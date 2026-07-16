@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function formatMoney(value) {
@@ -44,7 +45,7 @@ export default function InventoryPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/inventory-items", {
+      const response = await fetch(API_BASE_URL + "/api/inventory-items", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -69,7 +70,7 @@ export default function InventoryPage({ user }) {
     try {
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/stock-movements", {
+      const response = await fetch(API_BASE_URL + "/api/stock-movements", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -131,7 +132,7 @@ export default function InventoryPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/inventory-items", {
+      const response = await fetch(API_BASE_URL + "/api/inventory-items", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

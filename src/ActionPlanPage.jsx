@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 const emptyForm = {
@@ -74,7 +75,7 @@ export default function ActionPlanPage({ user }) {
       setError("");
       setMessage("");
 
-      const data = await apiFetch("http://localhost:4000/api/action-tasks");
+      const data = await apiFetch(API_BASE_URL + "/api/action-tasks");
 
       setTasks(data.tasks || []);
       setMessage("Görevler database’den yüklendi.");
@@ -115,7 +116,7 @@ export default function ActionPlanPage({ user }) {
 
       if (editingId) {
         const data = await apiFetch(
-          "http://localhost:4000/api/action-tasks/" + editingId,
+          API_BASE_URL + "/api/action-tasks/" + editingId,
           {
             method: "PUT",
             body: JSON.stringify(form),
@@ -131,7 +132,7 @@ export default function ActionPlanPage({ user }) {
         return;
       }
 
-      const data = await apiFetch("http://localhost:4000/api/action-tasks", {
+      const data = await apiFetch(API_BASE_URL + "/api/action-tasks", {
         method: "POST",
         body: JSON.stringify(form),
       });
@@ -166,7 +167,7 @@ export default function ActionPlanPage({ user }) {
       if (!currentTask) return;
 
       const data = await apiFetch(
-        "http://localhost:4000/api/action-tasks/" + taskId,
+        API_BASE_URL + "/api/action-tasks/" + taskId,
         {
           method: "PUT",
           body: JSON.stringify({
@@ -188,7 +189,7 @@ export default function ActionPlanPage({ user }) {
 
   async function deleteTask(taskId) {
     try {
-      await apiFetch("http://localhost:4000/api/action-tasks/" + taskId, {
+      await apiFetch(API_BASE_URL + "/api/action-tasks/" + taskId, {
         method: "DELETE",
       });
 

@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function formatMoney(value) {
@@ -122,9 +123,9 @@ export default function SupplierStatementPage({ user }) {
       setMessage("");
 
       const [statementData, paymentList, supplierList] = await Promise.all([
-        safeFetch("http://localhost:4000/api/supplier-statements", null),
-        safeFetch("http://localhost:4000/api/supplier-payments", "supplierPayments"),
-        safeFetch("http://localhost:4000/api/suppliers", "suppliers"),
+        safeFetch(API_BASE_URL + "/api/supplier-statements", null),
+        safeFetch(API_BASE_URL + "/api/supplier-payments", "supplierPayments"),
+        safeFetch(API_BASE_URL + "/api/suppliers", "suppliers"),
       ]);
 
       const statements = statementData?.supplierStatements || [];
@@ -225,7 +226,7 @@ export default function SupplierStatementPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/supplier-payments", {
+      const response = await fetch(API_BASE_URL + "/api/supplier-payments", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -271,7 +272,7 @@ export default function SupplierStatementPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/supplier-payments/${payment.id}/cancel`,
+        API_BASE_URL + `/api/supplier-payments/${payment.id}/cancel`,
         {
           method: "PUT",
           headers: {

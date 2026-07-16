@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function formatMoney(value) {
@@ -93,7 +94,7 @@ export default function DailySalesPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/daily-sales", {
+      const response = await fetch(API_BASE_URL + "/api/daily-sales", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -157,7 +158,7 @@ export default function DailySalesPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/daily-sales", {
+      const response = await fetch(API_BASE_URL + "/api/daily-sales", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -203,7 +204,7 @@ export default function DailySalesPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/daily-sales/${sale.id}/cancel`,
+        API_BASE_URL + `/api/daily-sales/${sale.id}/cancel`,
         {
           method: "PUT",
           headers: {

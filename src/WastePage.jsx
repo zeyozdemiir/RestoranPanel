@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function formatMoney(value) {
@@ -96,7 +97,7 @@ export default function WastePage({ user }) {
     try {
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/inventory-items", {
+      const response = await fetch(API_BASE_URL + "/api/inventory-items", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -119,7 +120,7 @@ export default function WastePage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/waste-records", {
+      const response = await fetch(API_BASE_URL + "/api/waste-records", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -203,7 +204,7 @@ export default function WastePage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/waste-records", {
+      const response = await fetch(API_BASE_URL + "/api/waste-records", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -250,7 +251,7 @@ export default function WastePage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/waste-records/${record.id}/cancel`,
+        API_BASE_URL + `/api/waste-records/${record.id}/cancel`,
         {
           method: "PUT",
           headers: {

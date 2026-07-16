@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function formatMoney(value) {
@@ -107,10 +108,10 @@ export default function ProfitLossPage({ user }) {
       setMessage("");
 
       const [expenseList, wasteList, salesList, reportList] = await Promise.all([
-        safeFetchArray("http://localhost:4000/api/expenses", "expenses"),
-        safeFetchArray("http://localhost:4000/api/waste-records", "wasteRecords"),
-        safeFetchArray("http://localhost:4000/api/sales", "sales"),
-        safeFetchArray("http://localhost:4000/api/daily-reports", "dailyReports"),
+        safeFetchArray(API_BASE_URL + "/api/expenses", "expenses"),
+        safeFetchArray(API_BASE_URL + "/api/waste-records", "wasteRecords"),
+        safeFetchArray(API_BASE_URL + "/api/sales", "sales"),
+        safeFetchArray(API_BASE_URL + "/api/daily-reports", "dailyReports"),
       ]);
 
       setExpenses(expenseList);

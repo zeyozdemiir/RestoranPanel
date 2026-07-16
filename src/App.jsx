@@ -21,6 +21,7 @@ import ReportCenterPage from "./ReportCenterPage";
 import DailyChecklistPage from "./DailyChecklistPage";
 import ActionPlanPage from "./ActionPlanPage";
 import PermissionStatusPage from "./PermissionStatusPage";
+import { API_BASE_URL } from "./apiConfig";
 
 function isPermissionStatusPage(activePage) {
   const page = String(activePage || "").toLocaleLowerCase("tr-TR");
@@ -1446,7 +1447,7 @@ function LoginScreen({ onLogin }) {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:4000/api/auth/login", {
+      const response = await fetch(API_BASE_URL + "/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1674,7 +1675,7 @@ function Dashboard({ user }) {
           return;
         }
 
-        const response = await fetch("http://localhost:4000/api/dashboard/summary", {
+        const response = await fetch(API_BASE_URL + "/api/dashboard/summary", {
           headers: {
             Authorization: `Bearer ${token}`,
           },

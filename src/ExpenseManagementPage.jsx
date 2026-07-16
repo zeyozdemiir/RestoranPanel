@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function formatMoney(value) {
@@ -194,7 +195,7 @@ export default function ExpenseManagementPage({ user }) {
     try {
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/suppliers", {
+      const response = await fetch(API_BASE_URL + "/api/suppliers", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -217,7 +218,7 @@ export default function ExpenseManagementPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/expenses", {
+      const response = await fetch(API_BASE_URL + "/api/expenses", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -312,8 +313,8 @@ export default function ExpenseManagementPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const url = selectedExpense
-        ? `http://localhost:4000/api/expenses/${selectedExpense.id}`
-        : "http://localhost:4000/api/expenses";
+        ? API_BASE_URL + `/api/expenses/${selectedExpense.id}`
+        : API_BASE_URL + "/api/expenses";
 
       const method = selectedExpense ? "PUT" : "POST";
 
@@ -367,7 +368,7 @@ export default function ExpenseManagementPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/expenses/${expense.id}`,
+        API_BASE_URL + `/api/expenses/${expense.id}`,
         {
           method: "PUT",
           headers: {

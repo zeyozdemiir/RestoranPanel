@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useRef, useState } from "react";
 
 const documentTypeLabels = {
@@ -45,7 +46,7 @@ export default function ReportUploadPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/report-uploads", {
+      const response = await fetch(API_BASE_URL + "/api/report-uploads", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -85,7 +86,7 @@ export default function ReportUploadPage({ user }) {
       formData.append("file", selectedFile);
       formData.append("documentType", documentType);
 
-      const response = await fetch("http://localhost:4000/api/report-uploads", {
+      const response = await fetch(API_BASE_URL + "/api/report-uploads", {
         method: "POST",
         headers: {
           Authorization: "Bearer " + token,

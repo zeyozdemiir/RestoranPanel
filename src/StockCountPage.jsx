@@ -1,3 +1,4 @@
+import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
 
 function formatDate(value) {
@@ -73,7 +74,7 @@ export default function StockCountPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/stock-counts", {
+      const response = await fetch(API_BASE_URL + "/api/stock-counts", {
         headers: {
           Authorization: "Bearer " + token,
         },
@@ -144,7 +145,7 @@ export default function StockCountPage({ user }) {
 
       const token = localStorage.getItem("handsoff_token");
 
-      const response = await fetch("http://localhost:4000/api/stock-counts", {
+      const response = await fetch(API_BASE_URL + "/api/stock-counts", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -202,7 +203,7 @@ export default function StockCountPage({ user }) {
       const draft = lineDrafts[line.id] || {};
 
       const response = await fetch(
-        `http://localhost:4000/api/stock-counts/${selectedCount.id}/lines/${line.id}`,
+        API_BASE_URL + `/api/stock-counts/${selectedCount.id}/lines/${line.id}`,
         {
           method: "PUT",
           headers: {
@@ -269,7 +270,7 @@ export default function StockCountPage({ user }) {
       const token = localStorage.getItem("handsoff_token");
 
       const response = await fetch(
-        `http://localhost:4000/api/stock-counts/${selectedCount.id}/complete`,
+        API_BASE_URL + `/api/stock-counts/${selectedCount.id}/complete`,
         {
           method: "POST",
           headers: {
