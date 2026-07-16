@@ -366,6 +366,115 @@ app.get("/", (req, res) => {
   res.send("HandsOff Backend calisiyor.");
 });
 
+
+
+// HANDSOFF_SUPPLIER_PERMISSION_MIDDLEWARE
+
+function handsoffSupplierRestaurantId(req) {
+  return req.user?.restaurantId || req.user?.restaurant?.id || req.restaurantId || 1;
+}
+
+async function handsoffSupplierCurrentRoleMember(req) {
+  const restaurantId = handsoffSupplierRestaurantId(req);
+
+  const email = String(
+    req.user?.email ||
+    req.user?.user?.email ||
+    req.userEmail ||
+    ""
+  ).toLowerCase();
+
+  try {
+    if (!prisma.userRoleMember) {
+      return {
+        role: "OWNER",
+        status: "ACTIVE",
+        canManageSuppliers: true,
+      };
+    }
+
+    if (email) {
+      const member = await prisma.userRoleMember.findFirst({
+        where: {
+          restaurantId,
+          email: {
+            equals: email,
+          },
+        },
+      });
+
+      if (member) return member;
+    }
+
+    const owner = await prisma.userRoleMember.findFirst({
+      where: {
+        restaurantId,
+        role: "OWNER",
+        status: "ACTIVE",
+      },
+    });
+
+    if (owner) return owner;
+
+    return {
+      role: "OWNER",
+      status: "ACTIVE",
+      canManageSuppliers: true,
+    };
+  } catch (error) {
+    console.error("supplier role lookup error:", error);
+
+    return {
+      role: "OWNER",
+      status: "ACTIVE",
+      canManageSuppliers: true,
+    };
+  }
+}
+
+function handsoffCanManageSuppliers(member) {
+  if (!member) return false;
+  if (member.status && member.status !== "ACTIVE") return false;
+  if (member.role === "OWNER") return true;
+
+  return Boolean(member.canManageSuppliers);
+}
+
+async function handsoffSupplierWriteGuard(req, res, next) {
+  try {
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+      return next();
+    }
+
+    const member = await handsoffSupplierCurrentRoleMember(req);
+
+    if (handsoffCanManageSuppliers(member)) {
+      req.handsoffRoleMember = member;
+      return next();
+    }
+
+    return res.status(403).json({
+      message: "Bu tedarikçi işlemi için yetkiniz yok.",
+      requiredPermission: "canManageSuppliers",
+      currentRole: member?.role || null,
+    });
+  } catch (error) {
+    console.error("supplier permission error:", error);
+
+    return res.status(500).json({
+      message: "Tedarikçi yetki kontrolü yapılamadı.",
+      detail: error.message,
+    });
+  }
+}
+
+app.use(
+  ["/api/suppliers", "/api/purchase-orders", "/api/supplier-statements"],
+  authMiddleware,
+  handsoffSupplierWriteGuard
+);
+
+
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
