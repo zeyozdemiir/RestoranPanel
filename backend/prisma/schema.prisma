@@ -458,3 +458,23 @@ model DailyChecklistItem {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 }
+
+
+model UserRoleMember {
+  id                 Int      @id @default(autoincrement())
+  restaurantId       Int
+
+  fullName           String
+  email              String?
+  role               String   @default("READONLY")
+  status             String   @default("ACTIVE")
+
+  canViewReports     Boolean  @default(false)
+  canManageFinance   Boolean  @default(false)
+  canManageStock     Boolean  @default(false)
+  canManageSuppliers Boolean  @default(false)
+  canManageSettings  Boolean  @default(false)
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

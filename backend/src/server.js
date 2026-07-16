@@ -3976,6 +3976,221 @@ app.put("/api/daily-checklists/:date", authMiddleware, async (req, res) => {
 });
 
 
+
+
+const HANDSOFF_DEFAULT_USER_ROLES = [
+  {
+    fullName: "İşletme Sahibi",
+    email: "owner@handsoff.local",
+    role: "OWNER",
+    status: "ACTIVE",
+    canViewReports: true,
+    canManageFinance: true,
+    canManageStock: true,
+    canManageSuppliers: true,
+    canManageSettings: true,
+  },
+  {
+    fullName: "Muhasebe",
+    email: "accounting@handsoff.local",
+    role: "ACCOUNTING",
+    status: "ACTIVE",
+    canViewReports: true,
+    canManageFinance: true,
+    canManageStock: false,
+    canManageSuppliers: true,
+    canManageSettings: false,
+  },
+  {
+    fullName: "Mutfak",
+    email: "kitchen@handsoff.local",
+    role: "KITCHEN",
+    status: "ACTIVE",
+    canViewReports: false,
+    canManageFinance: false,
+    canManageStock: true,
+    canManageSuppliers: false,
+    canManageSettings: false,
+  },
+];
+
+async function ensureDefaultUserRoles(restaurantId) {
+  const count = await prisma.userRoleMember.count({
+    where: {
+      restaurantId,
+    },
+  });
+
+  if (count > 0) {
+    return;
+  }
+
+  for (const item of HANDSOFF_DEFAULT_USER_ROLES) {
+    await prisma.userRoleMember.create({
+      data: {
+        restaurantId,
+        ...item,
+      },
+    });
+  }
+}
+
+app.get("/api/user-roles", authMiddleware, async (req, res) => {
+  try {
+    const restaurantId = handsoffRestaurantId(req);
+
+    await ensureDefaultUserRoles(restaurantId);
+
+    const users = await prisma.userRoleMember.findMany({
+      where: {
+        restaurantId,
+      },
+      orderBy: {
+        id: "asc",
+      },
+    });
+
+    return res.json({
+      users,
+    });
+  } catch (error) {
+    console.error("user-roles get error:", error);
+
+    return res.status(500).json({
+      message: "Kullanıcı rolleri alınamadı.",
+      detail: error.message,
+    });
+  }
+});
+
+app.post("/api/user-roles", authMiddleware, async (req, res) => {
+  try {
+    const restaurantId = handsoffRestaurantId(req);
+    const body = req.body || {};
+
+    if (!body.fullName || !String(body.fullName).trim()) {
+      return res.status(400).json({
+        message: "Ad soyad zorunludur.",
+      });
+    }
+
+    const user = await prisma.userRoleMember.create({
+      data: {
+        restaurantId,
+        fullName: String(body.fullName).trim(),
+        email: body.email ? String(body.email).trim() : null,
+        role: body.role ? String(body.role).trim() : "READONLY",
+        status: body.status ? String(body.status).trim() : "ACTIVE",
+        canViewReports: Boolean(body.canViewReports),
+        canManageFinance: Boolean(body.canManageFinance),
+        canManageStock: Boolean(body.canManageStock),
+        canManageSuppliers: Boolean(body.canManageSuppliers),
+        canManageSettings: Boolean(body.canManageSettings),
+      },
+    });
+
+    return res.json({
+      message: "Kullanıcı rolü eklendi.",
+      user,
+    });
+  } catch (error) {
+    console.error("user-roles post error:", error);
+
+    return res.status(500).json({
+      message: "Kullanıcı rolü eklenemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+app.put("/api/user-roles/:id", authMiddleware, async (req, res) => {
+  try {
+    const restaurantId = handsoffRestaurantId(req);
+    const id = Number(req.params.id);
+    const body = req.body || {};
+
+    const existing = await prisma.userRoleMember.findFirst({
+      where: {
+        id,
+        restaurantId,
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        message: "Kullanıcı rolü bulunamadı.",
+      });
+    }
+
+    const user = await prisma.userRoleMember.update({
+      where: {
+        id,
+      },
+      data: {
+        fullName: body.fullName !== undefined ? String(body.fullName).trim() : existing.fullName,
+        email: body.email !== undefined ? String(body.email || "").trim() || null : existing.email,
+        role: body.role !== undefined ? String(body.role).trim() : existing.role,
+        status: body.status !== undefined ? String(body.status).trim() : existing.status,
+        canViewReports: body.canViewReports !== undefined ? Boolean(body.canViewReports) : existing.canViewReports,
+        canManageFinance: body.canManageFinance !== undefined ? Boolean(body.canManageFinance) : existing.canManageFinance,
+        canManageStock: body.canManageStock !== undefined ? Boolean(body.canManageStock) : existing.canManageStock,
+        canManageSuppliers: body.canManageSuppliers !== undefined ? Boolean(body.canManageSuppliers) : existing.canManageSuppliers,
+        canManageSettings: body.canManageSettings !== undefined ? Boolean(body.canManageSettings) : existing.canManageSettings,
+      },
+    });
+
+    return res.json({
+      message: "Kullanıcı rolü güncellendi.",
+      user,
+    });
+  } catch (error) {
+    console.error("user-roles put error:", error);
+
+    return res.status(500).json({
+      message: "Kullanıcı rolü güncellenemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+app.delete("/api/user-roles/:id", authMiddleware, async (req, res) => {
+  try {
+    const restaurantId = handsoffRestaurantId(req);
+    const id = Number(req.params.id);
+
+    const existing = await prisma.userRoleMember.findFirst({
+      where: {
+        id,
+        restaurantId,
+      },
+    });
+
+    if (!existing) {
+      return res.status(404).json({
+        message: "Kullanıcı rolü bulunamadı.",
+      });
+    }
+
+    await prisma.userRoleMember.delete({
+      where: {
+        id,
+      },
+    });
+
+    return res.json({
+      message: "Kullanıcı rolü silindi.",
+    });
+  } catch (error) {
+    console.error("user-roles delete error:", error);
+
+    return res.status(500).json({
+      message: "Kullanıcı rolü silinemedi.",
+      detail: error.message,
+    });
+  }
+});
+
+
 app.listen(PORT, () => {
   console.log(`HandsOff backend calisiyor: http://localhost:${PORT}`);
 });

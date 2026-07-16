@@ -1,150 +1,77 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 
-const storageKey = "handsoff_local_user_roles";
-
-const rolePresets = {
-  OWNER: {
-    label: "Yönetici",
-    description: "Tüm ekranları görür ve yönetir.",
-    permissions: [
-      "Yönetim Özeti",
-      "Ayarlar",
-      "Sistem Kontrol",
-      "Veri Yedekleme",
-      "Günlük Ciro",
-      "Nakit Akışı",
-      "Kâr Zarar",
-      "Tedarikçiler",
-      "Tedarikçi Cari",
-      "Satın Alma",
-      "Stok Yönetimi",
-      "Stok Sayımı",
-      "Zayi / Kırılma",
-    ],
-  },
-  ACCOUNTING: {
-    label: "Muhasebe",
-    description: "Gelir, gider, kasa, tedarikçi cari ve kâr zarar ekranlarını görür.",
-    permissions: [
-      "Yönetim Özeti",
-      "Günlük Ciro",
-      "Nakit Akışı",
-      "Kâr Zarar",
-      "Tedarikçiler",
-      "Tedarikçi Cari",
-      "Veri Yedekleme",
-    ],
-  },
-  KITCHEN: {
-    label: "Mutfak",
-    description: "Stok, stok sayımı, zayi ve satın alma süreçlerini görür.",
-    permissions: [
-      "Yönetim Özeti",
-      "Satın Alma",
-      "Stok Yönetimi",
-      "Stok Sayımı",
-      "Zayi / Kırılma",
-    ],
-  },
-  BAR: {
-    label: "Bar",
-    description: "Bar stokları, zayi, sayım ve satın alma taleplerini görür.",
-    permissions: [
-      "Yönetim Özeti",
-      "Satın Alma",
-      "Stok Yönetimi",
-      "Stok Sayımı",
-      "Zayi / Kırılma",
-    ],
-  },
-  WAITER: {
-    label: "Garson",
-    description: "Sınırlı operasyon ekranlarını görür.",
-    permissions: [
-      "Yönetim Özeti",
-      "Günlük Ciro",
-    ],
-  },
-  READONLY: {
-    label: "Sadece Okuma",
-    description: "Veri değiştirmeden yalnızca takip eder.",
-    permissions: [
-      "Yönetim Özeti",
-    ],
-  },
-};
-
-const emptyUser = {
-  name: "",
+const emptyForm = {
+  fullName: "",
   email: "",
   role: "READONLY",
-  permissions: rolePresets.READONLY.permissions,
+  status: "ACTIVE",
+  canViewReports: false,
+  canManageFinance: false,
+  canManageStock: false,
+  canManageSuppliers: false,
+  canManageSettings: false,
 };
 
-function createDefaultUsers(currentUser) {
-  return [
-    {
-      id: "current-user",
-      name:
-        currentUser?.name ||
-        currentUser?.fullName ||
-        currentUser?.restaurantName ||
-        "Ana Kullanıcı",
-      email: currentUser?.email || "admin@handsoff.com",
-      role: "OWNER",
-      permissions: rolePresets.OWNER.permissions,
-    },
-  ];
-}
+const roleLabels = {
+  OWNER: "İşletme Sahibi",
+  ACCOUNTING: "Muhasebe",
+  KITCHEN: "Mutfak",
+  BAR: "Bar",
+  WAITER: "Garson",
+  READONLY: "Sadece Görüntüleme",
+};
 
 export default function UserRolesPage({ user }) {
   const [users, setUsers] = useState([]);
-  const [selectedId, setSelectedId] = useState("");
-  const [form, setForm] = useState(emptyUser);
+  const [form, setForm] = useState(emptyForm);
+  const [editingId, setEditingId] = useState(null);
+  const [roleFilter, setRoleFilter] = useState("Tümü");
+  const [statusFilter, setStatusFilter] = useState("Tümü");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
+    fetchUsers();
+  }, []);
 
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
+  async function apiFetch(url, options = {}) {
+    const token = localStorage.getItem("handsoff_token");
 
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setUsers(parsed);
-          setSelectedId(parsed[0].id);
-          setForm(parsed[0]);
-          return;
-        }
-      } catch {
-        localStorage.removeItem(storageKey);
-      }
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+        ...(options.headers || {}),
+      },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "İşlem başarısız.");
     }
 
-    const defaults = createDefaultUsers(user);
-    setUsers(defaults);
-    setSelectedId(defaults[0].id);
-    setForm(defaults[0]);
-    localStorage.setItem(storageKey, JSON.stringify(defaults));
-  }, [user]);
-
-  const selectedUser = useMemo(() => {
-    return users.find((item) => item.id === selectedId) || null;
-  }, [users, selectedId]);
-
-  function saveUsers(nextUsers) {
-    setUsers(nextUsers);
-    localStorage.setItem(storageKey, JSON.stringify(nextUsers));
+    return data;
   }
 
-  function selectUser(id) {
-    const found = users.find((item) => item.id === id);
+  async function fetchUsers() {
+    try {
+      setLoading(true);
+      setError("");
+      setMessage("");
 
-    if (!found) return;
+      const data = await apiFetch("http://localhost:4000/api/user-roles");
 
-    setSelectedId(id);
-    setForm(found);
-    setMessage("");
+      setUsers(data.users || []);
+      setMessage("Kullanıcı rolleri database’den yüklendi.");
+    } catch (error) {
+      setError(error.message || "Backend bağlantısı kurulamadı.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function updateField(name, value) {
@@ -154,90 +81,129 @@ export default function UserRolesPage({ user }) {
     }));
   }
 
-  function changeRole(role) {
-    const preset = rolePresets[role] || rolePresets.READONLY;
-
-    setForm((current) => ({
-      ...current,
-      role,
-      permissions: preset.permissions,
-    }));
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
   }
 
-  function togglePermission(permission) {
-    setForm((current) => {
-      const currentPermissions = current.permissions || [];
+  async function handleSubmit(event) {
+    event.preventDefault();
 
-      const nextPermissions = currentPermissions.includes(permission)
-        ? currentPermissions.filter((item) => item !== permission)
-        : [...currentPermissions, permission];
+    if (!form.fullName.trim()) {
+      setError("Ad soyad gir.");
+      return;
+    }
 
-      return {
-        ...current,
-        permissions: nextPermissions,
-      };
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+
+      if (editingId) {
+        const data = await apiFetch(
+          "http://localhost:4000/api/user-roles/" + editingId,
+          {
+            method: "PUT",
+            body: JSON.stringify(form),
+          }
+        );
+
+        setUsers((current) =>
+          current.map((item) => (item.id === editingId ? data.user : item))
+        );
+
+        setMessage("Kullanıcı rolü database’de güncellendi.");
+        resetForm();
+        return;
+      }
+
+      const data = await apiFetch("http://localhost:4000/api/user-roles", {
+        method: "POST",
+        body: JSON.stringify(form),
+      });
+
+      setUsers((current) => [...current, data.user]);
+      setMessage("Kullanıcı rolü database’e eklendi.");
+      resetForm();
+    } catch (error) {
+      setError(error.message || "Kayıt yapılamadı.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function editUser(item) {
+    setEditingId(item.id);
+    setForm({
+      fullName: item.fullName || "",
+      email: item.email || "",
+      role: item.role || "READONLY",
+      status: item.status || "ACTIVE",
+      canViewReports: Boolean(item.canViewReports),
+      canManageFinance: Boolean(item.canManageFinance),
+      canManageStock: Boolean(item.canManageStock),
+      canManageSuppliers: Boolean(item.canManageSuppliers),
+      canManageSettings: Boolean(item.canManageSettings),
     });
   }
 
-  function saveRole() {
-    if (!form.name.trim() && !form.email.trim()) {
-      setMessage("Kullanıcı adı veya e-posta gir.");
-      return;
+  async function deleteUser(id) {
+    try {
+      await apiFetch("http://localhost:4000/api/user-roles/" + id, {
+        method: "DELETE",
+      });
+
+      setUsers((current) => current.filter((item) => item.id !== id));
+      setMessage("Kullanıcı rolü database’den silindi.");
+
+      if (editingId === id) {
+        resetForm();
+      }
+    } catch (error) {
+      setError(error.message || "Silme işlemi başarısız.");
     }
-
-    const nextForm = {
-      ...form,
-      id: form.id || "user-" + Date.now(),
-      permissions: form.permissions || [],
-    };
-
-    const exists = users.some((item) => item.id === nextForm.id);
-
-    const nextUsers = exists
-      ? users.map((item) => (item.id === nextForm.id ? nextForm : item))
-      : [...users, nextForm];
-
-    saveUsers(nextUsers);
-    setSelectedId(nextForm.id);
-    setForm(nextForm);
-    setMessage("Rol bilgisi kaydedildi.");
   }
 
-  function createNewUser() {
-    const next = {
-      ...emptyUser,
-      id: "user-" + Date.now(),
-      name: "Yeni Kullanıcı",
-      email: "",
-    };
+  async function quickStatus(id, status) {
+    const currentUser = users.find((item) => item.id === id);
 
-    setSelectedId(next.id);
-    setForm(next);
-    setMessage("");
-  }
+    if (!currentUser) return;
 
-  function deleteUser(id) {
-    if (users.length <= 1) {
-      setMessage("En az bir kullanıcı kalmalı.");
-      return;
+    try {
+      const data = await apiFetch("http://localhost:4000/api/user-roles/" + id, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...currentUser,
+          status,
+        }),
+      });
+
+      setUsers((current) =>
+        current.map((item) => (item.id === id ? data.user : item))
+      );
+
+      setMessage("Kullanıcı durumu güncellendi.");
+    } catch (error) {
+      setError(error.message || "Durum güncellenemedi.");
     }
-
-    const nextUsers = users.filter((item) => item.id !== id);
-    saveUsers(nextUsers);
-    setSelectedId(nextUsers[0].id);
-    setForm(nextUsers[0]);
-    setMessage("Kullanıcı silindi.");
   }
 
-  const allPermissions = Array.from(
-    new Set(
-      Object.values(rolePresets)
-        .map((role) => role.permissions)
-        .flat()
-    )
-  );
+  const filteredUsers = useMemo(() => {
+    return users.filter((item) => {
+      if (roleFilter !== "Tümü" && item.role !== roleFilter) return false;
+      if (statusFilter !== "Tümü" && item.status !== statusFilter) return false;
+      return true;
+    });
+  }, [users, roleFilter, statusFilter]);
 
-  const role = rolePresets[form.role] || rolePresets.READONLY;
+  const summary = useMemo(() => {
+    return {
+      total: users.length,
+      active: users.filter((item) => item.status === "ACTIVE").length,
+      passive: users.filter((item) => item.status !== "ACTIVE").length,
+      owners: users.filter((item) => item.role === "OWNER").length,
+    };
+  }, [users]);
 
   return (
     <div className="page">
@@ -249,14 +215,13 @@ export default function UserRolesPage({ user }) {
             <h1>Kullanıcı Rolleri / Yetkilendirme</h1>
 
             <p>
-              Bu ekran şu an güvenli lokal sürümde çalışır. Backend’i bozmadan
-              rol planını oluşturur. Daha sonra API seviyesinde zorunlu hale
-              getirilecek.
+              Kullanıcı rolleri artık database’e kaydedilir. Bu ekran gerçek
+              yetki yönetiminin temelini hazırlar.
             </p>
           </div>
 
-          <button className="hero-button" type="button" onClick={createNewUser}>
-            Yeni Kullanıcı
+          <button className="hero-button" type="button" onClick={fetchUsers}>
+            {loading ? "Yükleniyor..." : "Yenile"}
           </button>
         </div>
       </div>
@@ -274,93 +239,64 @@ export default function UserRolesPage({ user }) {
         </div>
       )}
 
+      {error && <div className="error-box">{error}</div>}
+
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1.4fr",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
           gap: 18,
         }}
       >
-        <div className="panel">
-          <div className="panel-head">
-            <div>
-              <h2>Kullanıcılar</h2>
-              <p className="panel-sub">Rol verilecek kullanıcı listesi.</p>
-            </div>
-
-            <span className="mini-pill">{users.length} kullanıcı</span>
-          </div>
-
-          <table className="module-table">
-            <thead>
-              <tr>
-                <th>Kullanıcı</th>
-                <th>Rol</th>
-                <th></th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {users.map((item) => {
-                const itemRole = rolePresets[item.role] || rolePresets.READONLY;
-
-                return (
-                  <tr
-                    key={item.id}
-                    onClick={() => selectUser(item.id)}
-                    style={{
-                      cursor: "pointer",
-                      background:
-                        item.id === selectedId ? "#f3f4f6" : "transparent",
-                    }}
-                  >
-                    <td>
-                      <strong>{item.name || "Kullanıcı"}</strong>
-                      <br />
-                      <span style={{ color: "#6b7280", fontSize: 12 }}>
-                        {item.email || "-"}
-                      </span>
-                    </td>
-
-                    <td>{itemRole.label}</td>
-
-                    <td>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          deleteUser(item.id);
-                        }}
-                      >
-                        Sil
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="stat-card">
+          <p>Toplam Kullanıcı</p>
+          <h3>{summary.total}</h3>
+          <span>Database kayıtlı</span>
         </div>
 
+        <div className="stat-card">
+          <p>Aktif</p>
+          <h3>{summary.active}</h3>
+          <span>Kullanıma açık</span>
+        </div>
+
+        <div className="stat-card">
+          <p>Pasif</p>
+          <h3>{summary.passive}</h3>
+          <span>Devre dışı</span>
+        </div>
+
+        <div className="stat-card">
+          <p>Owner</p>
+          <h3>{summary.owners}</h3>
+          <span>Tam yetkili</span>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit}>
         <div className="panel">
           <div className="panel-head">
             <div>
-              <h2>Rol Düzenle</h2>
-              <p className="panel-sub">{role.description}</p>
+              <h2>{editingId ? "Kullanıcı Rolü Düzenle" : "Yeni Kullanıcı Rolü"}</h2>
+              <p className="panel-sub">
+                Bu kayıtlar database’de tutulur; tarayıcı verisine bağlı değildir.
+              </p>
             </div>
 
-            <span className="mini-pill">
-              {selectedUser ? "Seçili kullanıcı" : "Yeni kullanıcı"}
-            </span>
+            {editingId && (
+              <button type="button" onClick={resetForm}>
+                Yeni Kayıt
+              </button>
+            )}
           </div>
 
           <div className="form-grid">
             <label>
               Ad Soyad
               <input
-                value={form.name}
-                onChange={(event) => updateField("name", event.target.value)}
-                placeholder="Kullanıcı adı"
+                value={form.fullName}
+                onChange={(event) => updateField("fullName", event.target.value)}
+                placeholder="Örn: Zeynep Özdemir"
               />
             </label>
 
@@ -369,102 +305,191 @@ export default function UserRolesPage({ user }) {
               <input
                 value={form.email}
                 onChange={(event) => updateField("email", event.target.value)}
-                placeholder="kullanici@mail.com"
+                placeholder="ornek@firma.com"
               />
             </label>
 
-            <label style={{ gridColumn: "1 / -1" }}>
+            <label>
               Rol
               <select
                 value={form.role}
-                onChange={(event) => changeRole(event.target.value)}
+                onChange={(event) => updateField("role", event.target.value)}
               >
-                {Object.entries(rolePresets).map(([key, value]) => (
-                  <option key={key} value={key}>
-                    {value.label}
-                  </option>
-                ))}
+                <option value="OWNER">İşletme Sahibi</option>
+                <option value="ACCOUNTING">Muhasebe</option>
+                <option value="KITCHEN">Mutfak</option>
+                <option value="BAR">Bar</option>
+                <option value="WAITER">Garson</option>
+                <option value="READONLY">Sadece Görüntüleme</option>
+              </select>
+            </label>
+
+            <label>
+              Durum
+              <select
+                value={form.status}
+                onChange={(event) => updateField("status", event.target.value)}
+              >
+                <option value="ACTIVE">Aktif</option>
+                <option value="PASSIVE">Pasif</option>
               </select>
             </label>
           </div>
 
-          <div style={{ marginTop: 18 }}>
-            <h3 style={{ marginBottom: 10 }}>Ekran İzinleri</h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                gap: 10,
-              }}
-            >
-              {allPermissions.map((permission) => (
-                <label
-                  key={permission}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 12,
-                    padding: 10,
-                    cursor: "pointer",
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={(form.permissions || []).includes(permission)}
-                    onChange={() => togglePermission(permission)}
-                  />
-
-                  <span>{permission}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
           <div
             style={{
-              display: "flex",
-              justifyContent: "flex-end",
+              display: "grid",
+              gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+              gap: 12,
               marginTop: 18,
             }}
           >
-            <button className="hero-button" type="button" onClick={saveRole}>
-              Rolü Kaydet
+            <label>
+              <input
+                type="checkbox"
+                checked={form.canViewReports}
+                onChange={(event) => updateField("canViewReports", event.target.checked)}
+              />{" "}
+              Rapor Görür
+            </label>
+
+            <label>
+              <input
+                type="checkbox"
+                checked={form.canManageFinance}
+                onChange={(event) => updateField("canManageFinance", event.target.checked)}
+              />{" "}
+              Finans
+            </label>
+
+            <label>
+              <input
+                type="checkbox"
+                checked={form.canManageStock}
+                onChange={(event) => updateField("canManageStock", event.target.checked)}
+              />{" "}
+              Stok
+            </label>
+
+            <label>
+              <input
+                type="checkbox"
+                checked={form.canManageSuppliers}
+                onChange={(event) => updateField("canManageSuppliers", event.target.checked)}
+              />{" "}
+              Tedarikçi
+            </label>
+
+            <label>
+              <input
+                type="checkbox"
+                checked={form.canManageSettings}
+                onChange={(event) => updateField("canManageSettings", event.target.checked)}
+              />{" "}
+              Ayarlar
+            </label>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+            <button className="hero-button" type="submit" disabled={saving}>
+              {saving ? "Kaydediliyor..." : editingId ? "Güncelle" : "Kaydet"}
             </button>
           </div>
         </div>
-      </div>
+      </form>
 
       <div className="panel">
         <div className="panel-head">
           <div>
-            <h2>Rol Şablonları</h2>
+            <h2>Kullanıcı Listesi</h2>
+            <p className="panel-sub">Database kayıtlı rol listesi.</p>
+          </div>
 
-            <p className="panel-sub">
-              Restoran içinde kullanacağımız temel yetki şablonları.
-            </p>
+          <div style={{ display: "flex", gap: 10 }}>
+            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+              <option>Tümü</option>
+              <option value="OWNER">İşletme Sahibi</option>
+              <option value="ACCOUNTING">Muhasebe</option>
+              <option value="KITCHEN">Mutfak</option>
+              <option value="BAR">Bar</option>
+              <option value="WAITER">Garson</option>
+              <option value="READONLY">Sadece Görüntüleme</option>
+            </select>
+
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option>Tümü</option>
+              <option value="ACTIVE">Aktif</option>
+              <option value="PASSIVE">Pasif</option>
+            </select>
           </div>
         </div>
 
         <table className="module-table">
           <thead>
             <tr>
+              <th>Kullanıcı</th>
               <th>Rol</th>
-              <th>Açıklama</th>
-              <th>İzinler</th>
+              <th>Durum</th>
+              <th>Yetkiler</th>
+              <th>İşlem</th>
             </tr>
           </thead>
 
           <tbody>
-            {Object.entries(rolePresets).map(([key, value]) => (
-              <tr key={key}>
-                <td>{value.label}</td>
-                <td>{value.description}</td>
-                <td>{value.permissions.join(", ")}</td>
+            {filteredUsers.length === 0 ? (
+              <tr>
+                <td colSpan="5">Kayıt yok.</td>
               </tr>
-            ))}
+            ) : (
+              filteredUsers.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <strong>{item.fullName}</strong>
+                    <br />
+                    <span style={{ color: "#6b7280", fontSize: 12 }}>
+                      {item.email || "-"}
+                    </span>
+                  </td>
+
+                  <td>{roleLabels[item.role] || item.role}</td>
+
+                  <td>{item.status === "ACTIVE" ? "Aktif" : "Pasif"}</td>
+
+                  <td>
+                    {[
+                      item.canViewReports ? "Rapor" : null,
+                      item.canManageFinance ? "Finans" : null,
+                      item.canManageStock ? "Stok" : null,
+                      item.canManageSuppliers ? "Tedarikçi" : null,
+                      item.canManageSettings ? "Ayarlar" : null,
+                    ]
+                      .filter(Boolean)
+                      .join(", ") || "-"}
+                  </td>
+
+                  <td>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button type="button" onClick={() => editUser(item)}>
+                        Düzenle
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() =>
+                          quickStatus(item.id, item.status === "ACTIVE" ? "PASSIVE" : "ACTIVE")
+                        }
+                      >
+                        {item.status === "ACTIVE" ? "Pasif Yap" : "Aktif Yap"}
+                      </button>
+
+                      <button type="button" onClick={() => deleteUser(item.id)}>
+                        Sil
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
