@@ -1,7 +1,59 @@
-import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
+import { API_BASE_URL } from "./apiConfig";
 
-function formatMoney(value) {
+const fallbackItems = [
+  {
+    id: "stock-1",
+    name: "Dana bonfile",
+    category: "Et",
+    unit: "kg",
+    quantity: 8,
+    minQuantity: 10,
+    unitCost: 1250,
+    status: "CRITICAL",
+  },
+  {
+    id: "stock-2",
+    name: "Mozzarella",
+    category: "Süt Ürünleri",
+    unit: "kg",
+    quantity: 18,
+    minQuantity: 12,
+    unitCost: 320,
+    status: "OK",
+  },
+  {
+    id: "stock-3",
+    name: "Domates",
+    category: "Sebze",
+    unit: "kg",
+    quantity: 14,
+    minQuantity: 15,
+    unitCost: 55,
+    status: "LOW",
+  },
+  {
+    id: "stock-4",
+    name: "Aperol",
+    category: "Bar",
+    unit: "şişe",
+    quantity: 9,
+    minQuantity: 4,
+    unitCost: 1180,
+    status: "OK",
+  },
+];
+
+const emptyForm = {
+  name: "",
+  category: "",
+  unit: "",
+  quantity: "",
+  minQuantity: "",
+  unitCost: "",
+};
+
+function formatCurrency(value) {
   return new Intl.NumberFormat("tr-TR", {
     style: "currency",
     currency: "TRY",
@@ -9,36 +61,63 @@ function formatMoney(value) {
   }).format(Number(value || 0));
 }
 
-function formatDate(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("tr-TR");
+function normalizeItems(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.inventoryItems)) return data.inventoryItems;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
 }
 
-const emptyForm = {
-  name: "",
-  category: "Genel",
-  unit: "adet",
-  currentStock: "",
-  minStock: "",
-  note: "",
-};
+function getQuantity(item) {
+  return Number(item.quantity ?? item.currentStock ?? item.stock ?? 0);
+}
 
-export default function InventoryPage({ user }) {
-  const [inventoryItems, setInventoryItems] = useState([]);
-  const [stockMovements, setStockMovements] = useState([]);
-  const [selectedItem, setSelectedItem] = useState(null);
+function getMinQuantity(item) {
+  return Number(item.minQuantity ?? item.minimumStock ?? item.minStock ?? 0);
+}
+
+function getUnitCost(item) {
+  return Number(item.unitCost ?? item.cost ?? item.price ?? 0);
+}
+
+function getStockStatus(item) {
+  const quantity = getQuantity(item);
+  const minQuantity = getMinQuantity(item);
+
+  if (item.status) return item.status;
+  if (quantity <= 0) return "OUT";
+  if (quantity < minQuantity) return "CRITICAL";
+  if (quantity === minQuantity) return "LOW";
+  return "OK";
+}
+
+function getStatusLabel(status) {
+  if (status === "OK") return "Yeterli";
+  if (status === "LOW") return "Sınırda";
+  if (status === "CRITICAL") return "Kritik";
+  if (status === "OUT") return "Bitti";
+  return status || "Durum Yok";
+}
+
+function getStatusStyle(status) {
+  if (status === "OK") return styles.badgeOk;
+  if (status === "LOW") return styles.badgeWarn;
+  if (status === "CRITICAL" || status === "OUT") return styles.badgeError;
+  return styles.badgeBlue;
+}
+
+function InventoryPage() {
+  const [items, setItems] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [form, setForm] = useState(emptyForm);
-  const [loading, setLoading] = useState(false);
+  const [source, setSource] = useState("api");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [formMessage, setFormMessage] = useState("");
 
-  useEffect(() => {
-    fetchInventory();
-    fetchStockMovements();
-  }, []);
-
-  async function fetchInventory() {
+  async function fetchItems() {
     try {
       setLoading(true);
       setError("");
@@ -51,84 +130,60 @@ export default function InventoryPage({ user }) {
         },
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setError(data.message || "Stok kartları alınamadı.");
+        setItems(fallbackItems);
+        setSource("demo");
+        setError("Backend stok verisi alınamadı. Ekran örnek verilerle gösteriliyor.");
         return;
       }
 
-      setInventoryItems(data.inventoryItems || []);
+      const normalized = normalizeItems(data);
+
+      if (normalized.length === 0) {
+        setItems(fallbackItems);
+        setSource("demo");
+        setError("Kayıtlı stok ürünü bulunamadı. Örnek stok listesi gösteriliyor.");
+        return;
+      }
+
+      setItems(normalized);
+      setSource("api");
     } catch {
-      setError("Backend bağlantısı kurulamadı.");
+      setItems(fallbackItems);
+      setSource("demo");
+      setError("Backend bağlantısı kurulamadı. Ekran örnek verilerle gösteriliyor.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function fetchStockMovements() {
-    try {
-      const token = localStorage.getItem("handsoff_token");
+  useEffect(() => {
+    fetchItems();
+  }, []);
 
-      const response = await fetch(API_BASE_URL + "/api/stock-movements", {
-        headers: {
-          Authorization: "Bearer " + token,
-        },
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setStockMovements(data.stockMovements || []);
-      }
-    } catch {
-      setStockMovements([]);
-    }
-  }
-
-  function handleChange(event) {
-    const { name, value } = event.target;
-
-    setForm((currentForm) => ({
-      ...currentForm,
-      [name]: value,
-    }));
-  }
-
-  function handleNewItem() {
-    setSelectedItem(null);
-    setForm(emptyForm);
-    setMessage("");
-    setError("");
-  }
-
-  function handleSelectItem(item) {
-    setSelectedItem(item);
-    setMessage("");
-    setError("");
-
-    setForm({
-      name: item.name || "",
-      category: item.category || "Genel",
-      unit: item.unit || "adet",
-      currentStock: String(item.currentStock || ""),
-      minStock: String(item.minStock || ""),
-      note: item.note || "",
-    });
-  }
-
-  async function handleSaveItem(event) {
+  async function handleCreateItem(event) {
     event.preventDefault();
 
     if (!form.name.trim()) {
-      setError("Stok adı zorunlu.");
+      setFormMessage("Ürün adı zorunlu.");
       return;
     }
 
+    const newItem = {
+      id: "local-stock-" + Date.now(),
+      name: form.name.trim(),
+      category: form.category.trim() || "Genel",
+      unit: form.unit.trim() || "adet",
+      quantity: Number(form.quantity || 0),
+      minQuantity: Number(form.minQuantity || 0),
+      unitCost: Number(form.unitCost || 0),
+    };
+
     try {
       setSaving(true);
-      setError("");
-      setMessage("");
+      setFormMessage("");
 
       const token = localStorage.getItem("handsoff_token");
 
@@ -138,500 +193,592 @@ export default function InventoryPage({ user }) {
           "Content-Type": "application/json",
           Authorization: "Bearer " + token,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify(newItem),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
-      if (!response.ok) {
-        setError(data.message || "Stok kartı kaydedilemedi.");
-        return;
+      if (response.ok) {
+        const savedItem = data.item || data.inventoryItem || data.data || data || newItem;
+        setItems((current) => [savedItem, ...current]);
+        setSource("api");
+        setFormMessage("Stok ürünü backend’e kaydedildi.");
+      } else {
+        setItems((current) => [newItem, ...current]);
+        setFormMessage("Backend kayıt almadı; ürün geçici olarak ekranda gösteriliyor.");
       }
 
-      setMessage("Stok kartı kaydedildi.");
-      setSelectedItem(data.inventoryItem || null);
-
-      await fetchInventory();
-      await fetchStockMovements();
+      setForm(emptyForm);
     } catch {
-      setError("Stok kartı kaydedilirken backend bağlantısı kurulamadı.");
+      setItems((current) => [newItem, ...current]);
+      setFormMessage("Backend bağlantısı yok; ürün geçici olarak ekranda gösteriliyor.");
+      setForm(emptyForm);
     } finally {
       setSaving(false);
     }
   }
 
-  const lowStockItems = inventoryItems.filter((item) => {
-    return (
-      Number(item.minStock || 0) > 0 &&
-      Number(item.currentStock || 0) <= Number(item.minStock || 0)
-    );
-  });
+  const categories = useMemo(() => {
+    return Array.from(new Set(items.map((item) => item.category).filter(Boolean))).sort();
+  }, [items]);
 
-  const totalStockValue = inventoryItems.reduce((total, item) => {
-    const relatedMovements = stockMovements.filter(
-      (movement) => movement.inventoryItem?.id === item.id
-    );
+  const filteredItems = useMemo(() => {
+    if (selectedCategory === "ALL") return items;
+    return items.filter((item) => item.category === selectedCategory);
+  }, [items, selectedCategory]);
 
-    const lastMovement = relatedMovements[0];
-    const estimatedUnitPrice = lastMovement
-      ? Number(lastMovement.unitPrice || 0)
-      : 0;
+  const summary = useMemo(() => {
+    const totalValue = items.reduce((sum, item) => {
+      return sum + getQuantity(item) * getUnitCost(item);
+    }, 0);
 
-    return total + Number(item.currentStock || 0) * estimatedUnitPrice;
-  }, 0);
+    const critical = items.filter((item) => {
+      const status = getStockStatus(item);
+      return status === "CRITICAL" || status === "OUT";
+    }).length;
 
-  const categorySummary = useMemo(() => {
-    const summaryMap = new Map();
+    const low = items.filter((item) => getStockStatus(item) === "LOW").length;
 
-    inventoryItems.forEach((item) => {
-      const category = item.category || "Genel";
-      const current = summaryMap.get(category) || {
-        category,
-        count: 0,
-        totalStock: 0,
-        lowStockCount: 0,
-      };
-
-      current.count += 1;
-      current.totalStock += Number(item.currentStock || 0);
-
-      if (
-        Number(item.minStock || 0) > 0 &&
-        Number(item.currentStock || 0) <= Number(item.minStock || 0)
-      ) {
-        current.lowStockCount += 1;
-      }
-
-      summaryMap.set(category, current);
-    });
-
-    return Array.from(summaryMap.values()).sort((a, b) => b.count - a.count);
-  }, [inventoryItems]);
+    return {
+      total: items.length,
+      categories: categories.length,
+      critical,
+      low,
+      totalValue,
+    };
+  }, [items, categories.length]);
 
   return (
-    <div className="page">
-      <div className="hero">
-        <div className="hero-content">
-          <div>
-            <p className="eyebrow">HandsOff / {user.restaurantName}</p>
+    <main style={styles.page}>
+      <section style={styles.hero}>
+        <div>
+          <p style={styles.eyebrow}>HandsOff Stok Kontrolü</p>
+          <h1 style={styles.title}>Stok Yönetimi</h1>
+          <p style={styles.subtitle}>
+            Ürün stoklarını, kritik seviyeleri, kategori dağılımını ve toplam stok değerini tek ekranda takip edin.
+          </p>
+        </div>
 
-            <h1>Stok Yönetimi</h1>
+        <div style={styles.heroCard}>
+          <span style={styles.heroLabel}>Toplam Stok Değeri</span>
+          <strong style={styles.heroValue}>{formatCurrency(summary.totalValue)}</strong>
+          <small style={source === "api" ? styles.heroNoteOk : styles.heroNoteWarn}>
+            {source === "api" ? "Backend verisi kullanılıyor" : "Örnek veri gösteriliyor"}
+          </small>
+        </div>
+      </section>
 
-            <p>
-              Satın alma taleplerinden gelen stok girişlerini, stok kartlarını,
-              mevcut miktarları ve minimum stok uyarılarını buradan takip
-              edebilirsin.
-            </p>
+      <section style={styles.kpiGrid}>
+        <KpiCard title="Toplam Ürün" value={summary.total} note="Stokta takip edilen ürün" />
+        <KpiCard title="Kategori" value={summary.categories} note="Ürün grubu" />
+        <KpiCard title="Kritik" value={summary.critical} note="Acil tedarik gereken ürün" tone="danger" />
+        <KpiCard title="Sınırda" value={summary.low} note="Minimum seviyeye yaklaşan ürün" tone="warning" />
+      </section>
+
+      <section style={styles.createGrid}>
+        <article style={styles.panel}>
+          <h2 style={styles.panelTitle}>Yeni Stok Ürünü Ekle</h2>
+          <p style={styles.panelText}>Ürün, kategori, birim, miktar ve minimum stok seviyesini girin.</p>
+
+          <form onSubmit={handleCreateItem} style={styles.formGrid}>
+            <input
+              style={styles.input}
+              placeholder="Ürün adı"
+              value={form.name}
+              onChange={(event) => setForm({ ...form, name: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Kategori"
+              value={form.category}
+              onChange={(event) => setForm({ ...form, category: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Birim"
+              value={form.unit}
+              onChange={(event) => setForm({ ...form, unit: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Mevcut miktar"
+              type="number"
+              value={form.quantity}
+              onChange={(event) => setForm({ ...form, quantity: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Minimum miktar"
+              type="number"
+              value={form.minQuantity}
+              onChange={(event) => setForm({ ...form, minQuantity: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Birim maliyet"
+              type="number"
+              value={form.unitCost}
+              onChange={(event) => setForm({ ...form, unitCost: event.target.value })}
+            />
+
+            <button type="submit" style={styles.buttonWide} disabled={saving}>
+              {saving ? "Kaydediliyor..." : "Stok Ürünü Ekle"}
+            </button>
+          </form>
+
+          {formMessage ? <div style={styles.infoMessage}>{formMessage}</div> : null}
+        </article>
+
+        <article style={styles.panel}>
+          <h2 style={styles.panelTitle}>Kritik Stok Takibi</h2>
+          <p style={styles.panelText}>Minimum seviyenin altında kalan ürünler burada öne çıkar.</p>
+
+          <div style={styles.criticalList}>
+            {items
+              .filter((item) => {
+                const status = getStockStatus(item);
+                return status === "CRITICAL" || status === "OUT" || status === "LOW";
+              })
+              .slice(0, 5)
+              .map((item) => (
+                <div key={item.id || item.name} style={styles.criticalItem}>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>
+                      {getQuantity(item)} {item.unit || "adet"} / Min: {getMinQuantity(item)}
+                    </span>
+                  </div>
+
+                  <span style={{ ...styles.badge, ...getStatusStyle(getStockStatus(item)) }}>
+                    {getStatusLabel(getStockStatus(item))}
+                  </span>
+                </div>
+              ))}
+
+            {summary.critical === 0 && summary.low === 0 ? (
+              <div style={styles.emptyCritical}>Kritik stok bulunmuyor.</div>
+            ) : null}
           </div>
+        </article>
+      </section>
 
-          <button
-            className="hero-button"
-            type="button"
-            onClick={() => {
-              fetchInventory();
-              fetchStockMovements();
-            }}
+      <section style={styles.toolbar}>
+        <div>
+          <h2 style={styles.panelTitle}>Stok Listesi</h2>
+          <p style={styles.panelText}>Kategoriye göre ürün stoklarını filtreleyin.</p>
+        </div>
+
+        <div style={styles.actions}>
+          <select
+            value={selectedCategory}
+            onChange={(event) => setSelectedCategory(event.target.value)}
+            style={styles.select}
           >
+            <option value="ALL">Tüm Kategoriler</option>
+            {categories.map((category) => (
+              <option key={category} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+
+          <button type="button" onClick={fetchItems} style={styles.button}>
             Yenile
           </button>
         </div>
-      </div>
+      </section>
 
-      {message && (
-        <div
-          className="error-box"
-          style={{
-            color: "#166534",
-            background: "#f0fdf4",
-            borderColor: "#bbf7d0",
-          }}
-        >
-          {message}
-        </div>
+      {loading ? (
+        <section style={styles.stateBox}>Stok ürünleri yükleniyor...</section>
+      ) : (
+        <>
+          {error ? <section style={styles.warningBox}>{error}</section> : null}
+
+          <section style={styles.grid}>
+            {filteredItems.map((item) => {
+              const status = getStockStatus(item);
+
+              return (
+                <article key={item.id || item.name} style={styles.card}>
+                  <div style={styles.cardTop}>
+                    <div>
+                      <h3 style={styles.cardTitle}>{item.name || item.productName || "Ürün"}</h3>
+                      <p style={styles.cardText}>{item.category || "Kategori belirtilmedi"}</p>
+                    </div>
+
+                    <span style={{ ...styles.badge, ...getStatusStyle(status) }}>
+                      {getStatusLabel(status)}
+                    </span>
+                  </div>
+
+                  <div style={styles.stockBox}>
+                    <span>Mevcut Stok</span>
+                    <strong>
+                      {getQuantity(item)} {item.unit || "adet"}
+                    </strong>
+                  </div>
+
+                  <div style={styles.metaGrid}>
+                    <div style={styles.metaBox}>
+                      <span>Minimum</span>
+                      <strong>
+                        {getMinQuantity(item)} {item.unit || "adet"}
+                      </strong>
+                    </div>
+
+                    <div style={styles.metaBox}>
+                      <span>Birim Maliyet</span>
+                      <strong>{formatCurrency(getUnitCost(item))}</strong>
+                    </div>
+
+                    <div style={styles.metaBox}>
+                      <span>Stok Değeri</span>
+                      <strong>{formatCurrency(getQuantity(item) * getUnitCost(item))}</strong>
+                    </div>
+
+                    <div style={styles.metaBox}>
+                      <span>Birim</span>
+                      <strong>{item.unit || "adet"}</strong>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+        </>
       )}
-
-      {error && <div className="error-box">{error}</div>}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-          gap: 18,
-        }}
-      >
-        <div className="stat-card">
-          <p>Toplam Stok Kartı</p>
-          <h3>{inventoryItems.length}</h3>
-          <span>Kayıtlı stok kalemi</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Düşük Stok</p>
-          <h3>{lowStockItems.length}</h3>
-          <span>Minimum seviyeye gelenler</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Stok Hareketi</p>
-          <h3>{stockMovements.length}</h3>
-          <span>Giriş / çıkış hareketleri</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Tahmini Stok Değeri</p>
-          <h3>{formatMoney(totalStockValue)}</h3>
-          <span>Son alış fiyatına göre yaklaşık</span>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Kategori Özeti</h2>
-
-            <p className="panel-sub">
-              Stok kartlarının kategori bazlı dağılımı.
-            </p>
-          </div>
-
-          <span className="mini-pill">{categorySummary.length} kategori</span>
-        </div>
-
-        <table className="module-table">
-          <thead>
-            <tr>
-              <th>Kategori</th>
-              <th>Ürün Sayısı</th>
-              <th>Toplam Miktar</th>
-              <th>Düşük Stok</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {categorySummary.length === 0 ? (
-              <tr>
-                <td colSpan="4">Henüz kategori özeti yok.</td>
-              </tr>
-            ) : (
-              categorySummary.map((item) => (
-                <tr key={item.category}>
-                  <td>{item.category}</td>
-                  <td>{item.count}</td>
-                  <td>{item.totalStock}</td>
-                  <td>{item.lowStockCount}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>{selectedItem ? "Stok Kartı Düzenle" : "Yeni Stok Kartı"}</h2>
-
-            <p className="panel-sub">
-              Satın alma talebinden otomatik gelen ürünleri burada
-              düzenleyebilir veya manuel stok kartı oluşturabilirsin.
-            </p>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <span className="mini-pill">
-              {selectedItem ? "Seçili Kayıt" : "Yeni Kayıt"}
-            </span>
-
-            <button
-              className="hero-button"
-              type="button"
-              onClick={handleNewItem}
-            >
-              Yeni Stok Kartı
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={handleSaveItem}>
-          <table className="module-table">
-            <tbody>
-              <tr>
-                <td>Stok Adı</td>
-                <td>
-                  <input
-                    name="name"
-                    value={form.name}
-                    onChange={handleChange}
-                    placeholder="Örn: Dana bonfile, domates, şarap, temizlik ürünü"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-
-              <tr>
-                <td>Kategori</td>
-                <td>
-                  <select
-                    name="category"
-                    value={form.category}
-                    onChange={handleChange}
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  >
-                    <option value="Genel">Genel</option>
-                    <option value="Et / Tavuk">Et / Tavuk</option>
-                    <option value="Balık">Balık</option>
-                    <option value="Sebze / Meyve">Sebze / Meyve</option>
-                    <option value="İçecek">İçecek</option>
-                    <option value="Alkol">Alkol</option>
-                    <option value="Kuru Gıda">Kuru Gıda</option>
-                    <option value="Temizlik">Temizlik</option>
-                    <option value="Bakım / Onarım">Bakım / Onarım</option>
-                    <option value="Pazarlama">Pazarlama</option>
-                    <option value="Diğer">Diğer</option>
-                  </select>
-                </td>
-              </tr>
-
-              <tr>
-                <td>Birim</td>
-                <td>
-                  <select
-                    name="unit"
-                    value={form.unit}
-                    onChange={handleChange}
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  >
-                    <option value="adet">adet</option>
-                    <option value="kg">kg</option>
-                    <option value="gr">gr</option>
-                    <option value="lt">lt</option>
-                    <option value="ml">ml</option>
-                    <option value="koli">koli</option>
-                    <option value="şişe">şişe</option>
-                    <option value="paket">paket</option>
-                  </select>
-                </td>
-              </tr>
-
-              <tr>
-                <td>Mevcut Stok</td>
-                <td>
-                  <input
-                    type="number"
-                    name="currentStock"
-                    value={form.currentStock}
-                    onChange={handleChange}
-                    placeholder="Mevcut miktar"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-
-              <tr>
-                <td>Minimum Stok</td>
-                <td>
-                  <input
-                    type="number"
-                    name="minStock"
-                    value={form.minStock}
-                    onChange={handleChange}
-                    placeholder="Bu seviyeye düşünce uyarı"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-
-              <tr>
-                <td>Not</td>
-                <td>
-                  <textarea
-                    name="note"
-                    value={form.note}
-                    onChange={handleChange}
-                    rows="3"
-                    placeholder="İç not"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <button
-            className="hero-button"
-            type="submit"
-            disabled={saving}
-            style={{ marginTop: 18 }}
-          >
-            {saving
-              ? "Kaydediliyor..."
-              : selectedItem
-                ? "Stok Kartını Güncelle"
-                : "Stok Kartı Oluştur"}
-          </button>
-        </form>
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Stok Kartları</h2>
-
-            <p className="panel-sub">
-              Mevcut stok miktarlarını ve düşük stok uyarılarını buradan
-              görebilirsin.
-            </p>
-          </div>
-
-          <span className="mini-pill">{inventoryItems.length} kayıt</span>
-        </div>
-
-        <table className="module-table">
-          <thead>
-            <tr>
-              <th>İşlem</th>
-              <th>Stok</th>
-              <th>Kategori</th>
-              <th>Mevcut</th>
-              <th>Minimum</th>
-              <th>Durum</th>
-              <th>Güncelleme</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan="7">Stok kartları yükleniyor...</td>
-              </tr>
-            ) : inventoryItems.length === 0 ? (
-              <tr>
-                <td colSpan="7">Henüz stok kartı yok.</td>
-              </tr>
-            ) : (
-              inventoryItems.map((item) => {
-                const isLowStock =
-                  Number(item.minStock || 0) > 0 &&
-                  Number(item.currentStock || 0) <= Number(item.minStock || 0);
-
-                return (
-                  <tr key={item.id}>
-                    <td>
-                      <button
-                        type="button"
-                        className="hero-button"
-                        onClick={() => handleSelectItem(item)}
-                        style={{ padding: "8px 12px", borderRadius: 12 }}
-                      >
-                        Düzenle
-                      </button>
-                    </td>
-
-                    <td>{item.name}</td>
-                    <td>{item.category}</td>
-                    <td>
-                      {item.currentStock} {item.unit}
-                    </td>
-                    <td>
-                      {item.minStock} {item.unit}
-                    </td>
-                    <td>{isLowStock ? "Düşük stok" : "Yeterli"}</td>
-                    <td>{formatDate(item.updatedAt || item.createdAt)}</td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Stok Hareketleri</h2>
-
-            <p className="panel-sub">
-              Satın alma taleplerinden gelen stok girişleri burada görünür.
-            </p>
-          </div>
-
-          <span className="mini-pill">{stockMovements.length} hareket</span>
-        </div>
-
-        <table className="module-table">
-          <thead>
-            <tr>
-              <th>Tarih</th>
-              <th>Stok</th>
-              <th>Tip</th>
-              <th>Miktar</th>
-              <th>Birim Fiyat</th>
-              <th>Toplam</th>
-              <th>Kaynak</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {stockMovements.length === 0 ? (
-              <tr>
-                <td colSpan="7">Henüz stok hareketi yok.</td>
-              </tr>
-            ) : (
-              stockMovements.map((movement) => (
-                <tr key={movement.id}>
-                  <td>{formatDate(movement.movementDate)}</td>
-                  <td>{movement.inventoryItem?.name || "-"}</td>
-                  <td>
-                    {movement.type === "PURCHASE_IN"
-                      ? "Satın alma girişi"
-                      : movement.type}
-                  </td>
-                  <td>
-                    {movement.quantity} {movement.unit}
-                  </td>
-                  <td>{formatMoney(movement.unitPrice)}</td>
-                  <td>{formatMoney(movement.totalAmount)}</td>
-                  <td>
-                    {movement.purchaseOrder
-                      ? movement.purchaseOrder.supplierName
-                      : movement.source}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    </main>
   );
 }
+
+function KpiCard({ title, value, note, tone }) {
+  return (
+    <article style={styles.kpiCard}>
+      <span style={styles.kpiTitle}>{title}</span>
+      <strong
+        style={
+          tone === "danger"
+            ? styles.kpiValueDanger
+            : tone === "warning"
+              ? styles.kpiValueWarn
+              : styles.kpiValue
+        }
+      >
+        {value}
+      </strong>
+      <small style={styles.kpiNote}>{note}</small>
+    </article>
+  );
+}
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    padding: "28px",
+    color: "#f8fafc",
+    background:
+      "radial-gradient(circle at top left, #14532d 0, transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 48%, #020617 100%)",
+  },
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "1fr 340px",
+    gap: "20px",
+    alignItems: "stretch",
+    marginBottom: "20px",
+  },
+  eyebrow: {
+    margin: 0,
+    color: "#86efac",
+    fontSize: "12px",
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+    fontWeight: 800,
+  },
+  title: {
+    margin: "8px 0",
+    fontSize: "40px",
+    lineHeight: 1.05,
+  },
+  subtitle: {
+    margin: 0,
+    maxWidth: "760px",
+    color: "#cbd5e1",
+    lineHeight: 1.6,
+    fontSize: "15px",
+  },
+  heroCard: {
+    padding: "22px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(255,255,255,0.13)",
+    boxShadow: "0 24px 80px rgba(0,0,0,0.35)",
+  },
+  heroLabel: {
+    display: "block",
+    color: "#cbd5e1",
+    fontSize: "13px",
+    marginBottom: "10px",
+  },
+  heroValue: {
+    display: "block",
+    fontSize: "32px",
+    color: "#ffffff",
+  },
+  heroNoteOk: {
+    display: "inline-block",
+    marginTop: "10px",
+    color: "#bbf7d0",
+    background: "rgba(34,197,94,0.16)",
+    padding: "6px 10px",
+    borderRadius: "999px",
+  },
+  heroNoteWarn: {
+    display: "inline-block",
+    marginTop: "10px",
+    color: "#fde68a",
+    background: "rgba(245,158,11,0.18)",
+    padding: "6px 10px",
+    borderRadius: "999px",
+  },
+  kpiGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: "16px",
+    marginBottom: "18px",
+  },
+  kpiCard: {
+    padding: "18px",
+    borderRadius: "20px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  kpiTitle: {
+    display: "block",
+    color: "#cbd5e1",
+    fontSize: "13px",
+    marginBottom: "10px",
+  },
+  kpiValue: {
+    display: "block",
+    fontSize: "30px",
+    color: "#ffffff",
+  },
+  kpiValueDanger: {
+    display: "block",
+    fontSize: "30px",
+    color: "#fecaca",
+  },
+  kpiValueWarn: {
+    display: "block",
+    fontSize: "30px",
+    color: "#fde68a",
+  },
+  kpiNote: {
+    display: "block",
+    color: "#94a3b8",
+    marginTop: "8px",
+  },
+  createGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "16px",
+    marginBottom: "16px",
+  },
+  panel: {
+    padding: "20px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  panelTitle: {
+    margin: 0,
+    fontSize: "21px",
+  },
+  panelText: {
+    margin: "6px 0 14px",
+    color: "#94a3b8",
+    fontSize: "13px",
+  },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "10px",
+  },
+  input: {
+    height: "42px",
+    borderRadius: "14px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "#0f172a",
+    color: "#f8fafc",
+    padding: "0 12px",
+    outline: "none",
+  },
+  buttonWide: {
+    gridColumn: "1 / -1",
+    height: "44px",
+    border: 0,
+    borderRadius: "14px",
+    padding: "0 16px",
+    background: "linear-gradient(135deg, #22c55e, #16a34a)",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  infoMessage: {
+    marginTop: "12px",
+    padding: "12px",
+    borderRadius: "14px",
+    color: "#bbf7d0",
+    background: "rgba(34,197,94,0.13)",
+    border: "1px solid rgba(34,197,94,0.18)",
+  },
+  criticalList: {
+    display: "grid",
+    gap: "10px",
+  },
+  criticalItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "12px",
+    alignItems: "center",
+    padding: "14px",
+    borderRadius: "16px",
+    background: "rgba(15,23,42,0.55)",
+  },
+  emptyCritical: {
+    padding: "14px",
+    borderRadius: "16px",
+    background: "rgba(34,197,94,0.12)",
+    color: "#bbf7d0",
+  },
+  toolbar: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "16px",
+    alignItems: "center",
+    padding: "20px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    marginBottom: "16px",
+  },
+  actions: {
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+  },
+  select: {
+    height: "42px",
+    minWidth: "180px",
+    borderRadius: "14px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "#0f172a",
+    color: "#f8fafc",
+    padding: "0 12px",
+    outline: "none",
+  },
+  button: {
+    height: "42px",
+    border: 0,
+    borderRadius: "14px",
+    padding: "0 16px",
+    background: "linear-gradient(135deg, #22c55e, #16a34a)",
+    color: "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  warningBox: {
+    padding: "16px",
+    borderRadius: "18px",
+    background: "rgba(245,158,11,0.12)",
+    border: "1px solid rgba(245,158,11,0.2)",
+    color: "#fde68a",
+    marginBottom: "16px",
+  },
+  stateBox: {
+    padding: "22px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    color: "#cbd5e1",
+    marginBottom: "16px",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "16px",
+  },
+  card: {
+    padding: "20px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  cardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "14px",
+    alignItems: "flex-start",
+    marginBottom: "16px",
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: "20px",
+  },
+  cardText: {
+    margin: "7px 0 0",
+    color: "#cbd5e1",
+    lineHeight: 1.55,
+    fontSize: "13px",
+  },
+  badge: {
+    flex: "0 0 auto",
+    padding: "7px 11px",
+    borderRadius: "999px",
+    fontSize: "12px",
+    fontWeight: 900,
+  },
+  badgeOk: {
+    color: "#bbf7d0",
+    background: "rgba(34,197,94,0.16)",
+  },
+  badgeWarn: {
+    color: "#fde68a",
+    background: "rgba(245,158,11,0.18)",
+  },
+  badgeError: {
+    color: "#fecaca",
+    background: "rgba(239,68,68,0.18)",
+  },
+  badgeBlue: {
+    color: "#bfdbfe",
+    background: "rgba(59,130,246,0.18)",
+  },
+  stockBox: {
+    display: "grid",
+    gap: "6px",
+    padding: "16px",
+    borderRadius: "18px",
+    background: "rgba(15,23,42,0.55)",
+    marginBottom: "14px",
+  },
+  metaGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "12px",
+  },
+  metaBox: {
+    display: "grid",
+    gap: "6px",
+    padding: "14px",
+    borderRadius: "16px",
+    background: "rgba(15,23,42,0.45)",
+  },
+};
+
+export default InventoryPage;
