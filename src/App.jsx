@@ -304,6 +304,9 @@ function isCommercialDebtsPage(activePage) {
 }
 
 function ResolvedModulePage({ activePage, user }) {
+  if (isCashFlowPage(activePage)) {
+    return <CashFlowPage user={user} />;
+  }
   if (isCommercialDebtsPage(activePage)) {
     return <CommercialDebtsPage user={user} />;
   }
