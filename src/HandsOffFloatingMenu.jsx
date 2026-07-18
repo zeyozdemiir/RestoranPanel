@@ -1,12 +1,12 @@
 import { API_BASE_URL } from "./apiConfig";
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const menuGroups = [
   {
     title: "Genel",
     items: [
       {
-        label: "Yönetim Özeti",
+        label: "YÃƒÂ¶netim Ãƒâ€“zeti",
         permission: "canViewReports",
       },
       {
@@ -22,15 +22,15 @@ const menuGroups = [
         permission: "canManageSettings",
       },
       {
-        label: "Kullanıcı Rolleri / Yetkilendirme",
+        label: "KullanÃ„Â±cÃ„Â± Rolleri / Yetkilendirme",
         permission: "canManageSettings",
       },
       {
-        label: "Sistem Sağlık Kontrolü",
+        label: "Sistem SaÃ„Å¸lÃ„Â±k KontrolÃƒÂ¼",
         permission: "canManageSettings",
       },
       {
-        label: "Veri Yedekleme / Dışa Aktarma",
+        label: "Veri Yedekleme / DÃ„Â±Ã…Å¸a Aktarma",
         permission: "canManageSettings",
       },
     ],
@@ -39,43 +39,43 @@ const menuGroups = [
     title: "Finans",
     items: [
       {
-        label: "Günlük Ciro / Gelir Girişi",
+        label: "GÃƒÂ¼nlÃƒÂ¼k Ciro / Gelir GiriÃ…Å¸i",
         permission: "canManageFinance",
       },
       {
-        label: "Gün Sonu Raporu",
+        label: "GÃƒÂ¼n Sonu Raporu",
         permission: "canViewReports",
       },
       {
-        label: "Günlük Kontrol Listesi",
+        label: "GÃƒÂ¼nlÃƒÂ¼k Kontrol Listesi",
         permission: "canManageFinance",
       },
       {
-        label: "Haftalık Yönetim Raporu",
+        label: "HaftalÃ„Â±k YÃƒÂ¶netim Raporu",
         permission: "canViewReports",
       },
       {
-        label: "Aylık Yönetim Raporu",
+        label: "AylÃ„Â±k YÃƒÂ¶netim Raporu",
         permission: "canViewReports",
       },
       {
-        label: "Aksiyon Takip / Yönetim Görevleri",
+        label: "Aksiyon Takip / YÃƒÂ¶netim GÃƒÂ¶revleri",
         permission: "canViewReports",
       },
       {
-        label: "Nakit Akışı / Kasa Banka",
+        label: "Nakit AkÃ„Â±Ã…Å¸Ã„Â± / Kasa Banka",
         permission: "canManageFinance",
       },
       {
-        label: "Kâr Zarar",
+        label: "KÃƒÂ¢r Zarar",
         permission: "canViewReports",
       },
       {
-        label: "Gider Yönetimi",
+        label: "Gider YÃƒÂ¶netimi",
         permission: "canManageFinance",
       },
       {
-        label: "Tedarikçi Cari / Borç Takibi",
+        label: "TedarikÃƒÂ§i Cari / BorÃƒÂ§ Takibi",
         permission: "canManageSuppliers",
       },
     ],
@@ -84,23 +84,23 @@ const menuGroups = [
     title: "Tedarik & Stok",
     items: [
       {
-        label: "Tedarikçiler",
+        label: "TedarikÃƒÂ§iler",
         permission: "canManageSuppliers",
       },
       {
-        label: "Satın Alma Talepleri",
+        label: "SatÃ„Â±n Alma Talepleri",
         permission: "canManageSuppliers",
       },
       {
-        label: "Stok Yönetimi",
+        label: "Stok YÃƒÂ¶netimi",
         permission: "canManageStock",
       },
       {
-        label: "Stok Sayımı",
+        label: "Stok SayÃ„Â±mÃ„Â±",
         permission: "canManageStock",
       },
       {
-        label: "Zayi / Kırılma",
+        label: "Zayi / KÃ„Â±rÃ„Â±lma",
         permission: "canManageStock",
       },
     ],
@@ -113,15 +113,15 @@ const menuGroups = [
         permission: "operation",
       },
       {
-        label: "Siparişler",
+        label: "SipariÃ…Å¸ler",
         permission: "operation",
       },
       {
-        label: "Görevler",
+        label: "GÃƒÂ¶revler",
         permission: "operation",
       },
       {
-        label: "Müşteriler",
+        label: "MÃƒÂ¼Ã…Å¸teriler",
         permission: "operation",
       },
       {
@@ -134,7 +134,7 @@ const menuGroups = [
 
 const fallbackOwner = {
   id: "fallback-owner",
-  fullName: "İşletme Sahibi",
+  fullName: "Ã„Â°Ã…Å¸letme Sahibi",
   email: "",
   role: "OWNER",
   status: "ACTIVE",
@@ -161,12 +161,12 @@ function getSessionUser() {
 
 function getRoleName(role) {
   const names = {
-    OWNER: "İşletme Sahibi",
+    OWNER: "Ã„Â°Ã…Å¸letme Sahibi",
     ACCOUNTING: "Muhasebe",
     KITCHEN: "Mutfak",
     BAR: "Bar",
     WAITER: "Garson",
-    READONLY: "Sadece Görüntüleme",
+    READONLY: "Sadece GÃƒÂ¶rÃƒÂ¼ntÃƒÂ¼leme",
   };
 
   return names[role] || role || "Rol Yok";
@@ -230,14 +230,14 @@ export default function HandsOffFloatingMenu() {
 
       if (!response.ok) {
         setRoleUsers([]);
-        setError(data.message || "Roller alınamadı.");
+        setError(data.message || "Roller alÃ„Â±namadÃ„Â±.");
         return;
       }
 
       setRoleUsers(data.users || []);
     } catch {
       setRoleUsers([]);
-      setError("Rol listesi alınamadı.");
+      setError("Rol listesi alÃ„Â±namadÃ„Â±.");
     }
   }
 
@@ -292,7 +292,7 @@ export default function HandsOffFloatingMenu() {
           cursor: "pointer",
         }}
       >
-        Menü
+        MenÃƒÂ¼
       </button>
 
       {open && (
@@ -371,7 +371,7 @@ export default function HandsOffFloatingMenu() {
                   marginBottom: 6,
                 }}
               >
-                Yetki Önizleme
+                Yetki Ãƒâ€“nizleme
               </label>
 
               <select
@@ -384,7 +384,7 @@ export default function HandsOffFloatingMenu() {
                   padding: "10px 12px",
                 }}
               >
-                <option value="">Oturumdaki kullanıcı / Owner</option>
+                <option value="">Oturumdaki kullanÃ„Â±cÃ„Â± / Owner</option>
 
                 {roleUsers.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -394,8 +394,8 @@ export default function HandsOffFloatingMenu() {
               </select>
 
               <p style={{ margin: "8px 0 0", color: "#6b7280", fontSize: 11 }}>
-                Bu alan yayın öncesi test içindir. Gerçek güvenlik için backend
-                yetki kontrolü ayrıca bağlanacak.
+                Bu alan yayÃ„Â±n ÃƒÂ¶ncesi test iÃƒÂ§indir. GerÃƒÂ§ek gÃƒÂ¼venlik iÃƒÂ§in backend
+                yetki kontrolÃƒÂ¼ ayrÃ„Â±ca baÃ„Å¸lanacak.
               </p>
             </div>
           )}
@@ -469,7 +469,7 @@ export default function HandsOffFloatingMenu() {
                 color: "#6b7280",
               }}
             >
-              Bu rol için görüntülenecek menü bulunmuyor.
+              Bu rol iÃƒÂ§in gÃƒÂ¶rÃƒÂ¼ntÃƒÂ¼lenecek menÃƒÂ¼ bulunmuyor.
             </div>
           )}
         </div>

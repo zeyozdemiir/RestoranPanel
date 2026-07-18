@@ -21,6 +21,8 @@ import ReportCenterPage from "./ReportCenterPage";
 import DailyChecklistPage from "./DailyChecklistPage";
 import ActionPlanPage from "./ActionPlanPage";
 import PermissionStatusPage from "./PermissionStatusPage";
+import MenuCostPage from "./pages/MenuCost";
+import CommercialDebtsPage from "./CommercialDebtsPage";
 import { API_BASE_URL } from "./apiConfig";
 
 function isPermissionStatusPage(activePage) {
@@ -263,6 +265,51 @@ function isPurchaseOrdersPage(activePage) {
   );
 }
 
+
+
+function isMenuCostPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR");
+
+  return (
+    page.includes("menü & maliyet") ||
+    page.includes("menu & maliyet") ||
+    page.includes("menü maliyet") ||
+    page.includes("menu maliyet") ||
+    page.includes("reçete maliyet") ||
+    page.includes("recete maliyet") ||
+    page.includes("food cost") ||
+    (
+      page.includes("maliyet") &&
+      !page.includes("gider") &&
+      !page.includes("mühendis") &&
+      !page.includes("muhendis")
+    )
+  );
+}
+
+
+function isCommercialDebtsPage(activePage) {
+  const page = String(activePage || "").toLocaleLowerCase("tr-TR").trim();
+
+  return (
+    page.includes("ticari borç") ||
+    page.includes("ticari borc") ||
+    page === "borçlar" ||
+    page === "borclar" ||
+    page.includes("ödeme planı") ||
+    page.includes("odeme plani") ||
+    page.includes("commercial debts") ||
+    page.includes("payables")
+  );
+}
+
+function ResolvedModulePage({ activePage, user }) {
+  if (isCommercialDebtsPage(activePage)) {
+    return <CommercialDebtsPage user={user} />;
+  }
+
+  return <ResolvedModulePage activePage={activePage} user={user} />;
+}
 
 const menuGroups = [
   {
@@ -2053,7 +2100,9 @@ return (
         activePage === "Tedarikci Yonetimi" ? (
           <SuppliersPage user={user} />
         ) : (
-          isPurchaseOrdersPage(activePage) ? (
+          isMenuCostPage(activePage) ? (
+          <MenuCostPage user={user} />
+        ) : isPurchaseOrdersPage(activePage) ? (
           <PurchaseOrdersPage user={user} />
         ) : (
           isSystemHealthPage(activePage) ? (
@@ -2090,7 +2139,7 @@ return (
           isUserRolesPage(activePage) ? (
           <UserRolesPage user={user} />
         ) : (
-          <ModulePage title={activePage} />
+          <ResolvedModulePage activePage={activePage} user={user} />
         )
         )
         )
