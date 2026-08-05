@@ -1,73 +1,109 @@
-import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
+import { API_BASE_URL } from "./apiConfig";
 
-function formatDate(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("tr-TR");
-}
-
-function formatNumber(value) {
-  return new Intl.NumberFormat("tr-TR", {
-    maximumFractionDigits: 2,
-  }).format(Number(value || 0));
-}
+const fallbackCounts = [
+  {
+    id: "count-1",
+    productName: "Dana bonfile",
+    category: "Et",
+    unit: "kg",
+    systemQuantity: 8,
+    countedQuantity: 7.2,
+    note: "Mutfak kullanım farkı kontrol edilmeli",
+    countDate: "Bugün",
+    countedBy: "Stok Sorumlusu",
+  },
+  {
+    id: "count-2",
+    productName: "Mozzarella",
+    category: "Süt Ürünleri",
+    unit: "kg",
+    systemQuantity: 18,
+    countedQuantity: 18,
+    note: "Fark yok",
+    countDate: "Bugün",
+    countedBy: "Mutfak",
+  },
+  {
+    id: "count-3",
+    productName: "Aperol",
+    category: "Bar",
+    unit: "şişe",
+    systemQuantity: 9,
+    countedQuantity: 10,
+    note: "Sisteme işlenmeyen giriş olabilir",
+    countDate: "Bugün",
+    countedBy: "Bar",
+  },
+];
 
 const emptyForm = {
-  countNo: "",
-  countDate: new Date().toISOString().slice(0, 10),
+  productName: "",
+  category: "",
+  unit: "",
+  systemQuantity: "",
+  countedQuantity: "",
+  countedBy: "",
   note: "",
 };
 
-export default function StockCountPage({ user }) {
-  const [stockCounts, setStockCounts] = useState([]);
-  const [selectedCount, setSelectedCount] = useState(null);
+function normalizeCounts(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.counts)) return data.counts;
+  if (Array.isArray(data?.stockCounts)) return data.stockCounts;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
+}
+
+function getSystemQuantity(item) {
+  return Number(item.systemQuantity ?? item.expectedQuantity ?? item.expectedStock ?? 0);
+}
+
+function getCountedQuantity(item) {
+  return Number(item.countedQuantity ?? item.actualQuantity ?? item.countedStock ?? 0);
+}
+
+function getDifference(item) {
+  return getCountedQuantity(item) - getSystemQuantity(item);
+}
+
+function getAbsDifference(item) {
+  return Math.abs(getDifference(item));
+}
+
+function getStatus(item) {
+  const difference = getDifference(item);
+
+  if (difference === 0) return "OK";
+  if (difference < 0) return "SHORT";
+  return "EXCESS";
+}
+
+function getStatusLabel(status) {
+  if (status === "OK") return "Doğru";
+  if (status === "SHORT") return "Eksik";
+  if (status === "EXCESS") return "Fazla";
+  return "Durum Yok";
+}
+
+function getStatusStyle(status) {
+  if (status === "OK") return styles.badgeOk;
+  if (status === "SHORT") return styles.badgeError;
+  if (status === "EXCESS") return styles.badgeWarn;
+  return styles.badgeBlue;
+}
+
+function StockCountPage() {
+  const [counts, setCounts] = useState([]);
+  const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [form, setForm] = useState(emptyForm);
-  const [lineDrafts, setLineDrafts] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [savingLineId, setSavingLineId] = useState(null);
-  const [completing, setCompleting] = useState(false);
-  const [message, setMessage] = useState("");
+  const [source, setSource] = useState("api");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [formMessage, setFormMessage] = useState("");
 
-  useEffect(() => {
-    fetchStockCounts();
-    restoreDraft();
-  }, []);
-
-  useEffect(() => {
-    const hasDraftData = form.countNo || form.note;
-
-    if (hasDraftData) {
-      localStorage.setItem("handsoff_stock_count_form_draft", JSON.stringify(form));
-    }
-  }, [form]);
-
-  function restoreDraft() {
-    try {
-      const rawDraft = localStorage.getItem("handsoff_stock_count_form_draft");
-
-      if (!rawDraft) {
-        return;
-      }
-
-      const draft = JSON.parse(rawDraft);
-
-      if (!draft || typeof draft !== "object") {
-        localStorage.removeItem("handsoff_stock_count_form_draft");
-        return;
-      }
-
-      setForm({
-        ...emptyForm,
-        ...draft,
-      });
-    } catch {
-      localStorage.removeItem("handsoff_stock_count_form_draft");
-    }
-  }
-
-  async function fetchStockCounts() {
+  async function fetchCounts() {
     try {
       setLoading(true);
       setError("");
@@ -80,68 +116,62 @@ export default function StockCountPage({ user }) {
         },
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setError(data.message || "Stok sayımları alınamadı.");
+        setCounts(fallbackCounts);
+        setSource("demo");
+        setError("Backend stok sayım verisi alınamadı. Ekran örnek verilerle gösteriliyor.");
         return;
       }
 
-      const counts = data.stockCounts || [];
-      setStockCounts(counts);
+      const normalized = normalizeCounts(data);
 
-      if (!selectedCount && counts.length > 0) {
-        openCount(counts[0]);
-      } else if (selectedCount) {
-        const refreshed = counts.find((count) => count.id === selectedCount.id);
-
-        if (refreshed) {
-          openCount(refreshed);
-        }
+      if (normalized.length === 0) {
+        setCounts(fallbackCounts);
+        setSource("demo");
+        setError("Kayıtlı stok sayımı bulunamadı. Örnek sayım listesi gösteriliyor.");
+        return;
       }
+
+      setCounts(normalized);
+      setSource("api");
     } catch {
-      setError("Backend bağlantısı kurulamadı.");
+      setCounts(fallbackCounts);
+      setSource("demo");
+      setError("Backend bağlantısı kurulamadı. Ekran örnek verilerle gösteriliyor.");
     } finally {
       setLoading(false);
     }
   }
 
-  function handleFormChange(event) {
-    const { name, value } = event.target;
-
-    setForm((currentForm) => ({
-      ...currentForm,
-      [name]: value,
-    }));
-  }
-
-  function openCount(count) {
-    setSelectedCount(count);
-    setMessage("");
-    setError("");
-
-    const drafts = {};
-
-    (count.lines || []).forEach((line) => {
-      drafts[line.id] = {
-        countedStock:
-          line.countedStock === null || line.countedStock === undefined
-            ? ""
-            : String(line.countedStock),
-        note: line.note || "",
-      };
-    });
-
-    setLineDrafts(drafts);
-  }
+  useEffect(() => {
+    fetchCounts();
+  }, []);
 
   async function handleCreateCount(event) {
     event.preventDefault();
 
+    if (!form.productName.trim()) {
+      setFormMessage("Ürün adı zorunlu.");
+      return;
+    }
+
+    const newCount = {
+      id: "local-count-" + Date.now(),
+      productName: form.productName.trim(),
+      category: form.category.trim() || "Genel",
+      unit: form.unit.trim() || "adet",
+      systemQuantity: Number(form.systemQuantity || 0),
+      countedQuantity: Number(form.countedQuantity || 0),
+      countedBy: form.countedBy.trim() || "Belirtilmedi",
+      note: form.note.trim() || "Not girilmedi",
+      countDate: new Date().toLocaleDateString("tr-TR"),
+    };
+
     try {
-      setCreating(true);
-      setError("");
-      setMessage("");
+      setSaving(true);
+      setFormMessage("");
 
       const token = localStorage.getItem("handsoff_token");
 
@@ -151,591 +181,610 @@ export default function StockCountPage({ user }) {
           "Content-Type": "application/json",
           Authorization: "Bearer " + token,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify(newCount),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
-      if (!response.ok) {
-        setError(data.message || "Stok sayımı oluşturulamadı.");
-        return;
+      if (response.ok) {
+        const savedCount = data.count || data.stockCount || data.data || data || newCount;
+        setCounts((current) => [savedCount, ...current]);
+        setSource("api");
+        setFormMessage("Stok sayımı backend’e kaydedildi.");
+      } else {
+        setCounts((current) => [newCount, ...current]);
+        setFormMessage("Backend kayıt almadı; sayım geçici olarak ekranda gösteriliyor.");
       }
 
-      localStorage.removeItem("handsoff_stock_count_form_draft");
-
-      setMessage("Stok sayımı oluşturuldu.");
       setForm(emptyForm);
-      setSelectedCount(data.stockCount || null);
-
-      if (data.stockCount) {
-        openCount(data.stockCount);
-      }
-
-      await fetchStockCounts();
     } catch {
-      setError("Stok sayımı oluşturulurken backend bağlantısı kurulamadı.");
+      setCounts((current) => [newCount, ...current]);
+      setFormMessage("Backend bağlantısı yok; sayım geçici olarak ekranda gösteriliyor.");
+      setForm(emptyForm);
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   }
 
-  function handleLineDraftChange(lineId, field, value) {
-    setLineDrafts((currentDrafts) => ({
-      ...currentDrafts,
-      [lineId]: {
-        ...(currentDrafts[lineId] || {}),
-        [field]: value,
-      },
-    }));
-  }
+  const filteredCounts = useMemo(() => {
+    if (selectedStatus === "ALL") return counts;
 
-  async function handleSaveLine(line) {
-    if (!selectedCount) {
-      return;
-    }
-
-    try {
-      setSavingLineId(line.id);
-      setError("");
-      setMessage("");
-
-      const token = localStorage.getItem("handsoff_token");
-      const draft = lineDrafts[line.id] || {};
-
-      const response = await fetch(
-        API_BASE_URL + `/api/stock-counts/${selectedCount.id}/lines/${line.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + token,
-          },
-          body: JSON.stringify({
-            countedStock: draft.countedStock,
-            note: draft.note,
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || "Sayım satırı güncellenemedi.");
-        return;
-      }
-
-      const updatedLine = data.line;
-
-      const updatedSelectedCount = {
-        ...selectedCount,
-        lines: selectedCount.lines.map((currentLine) =>
-          currentLine.id === updatedLine.id ? updatedLine : currentLine
-        ),
-      };
-
-      setSelectedCount(updatedSelectedCount);
-
-      setStockCounts((currentCounts) =>
-        currentCounts.map((count) =>
-          count.id === updatedSelectedCount.id ? updatedSelectedCount : count
-        )
-      );
-
-      setMessage("Sayım satırı kaydedildi.");
-    } catch {
-      setError("Sayım satırı kaydedilirken backend bağlantısı kurulamadı.");
-    } finally {
-      setSavingLineId(null);
-    }
-  }
-
-  async function handleCompleteCount() {
-    if (!selectedCount) {
-      return;
-    }
-
-    const confirmed = window.confirm(
-      "Bu sayım tamamlanınca stok miktarları gerçek sayım miktarlarına göre güncellenecek. Devam edilsin mi?"
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setCompleting(true);
-      setError("");
-      setMessage("");
-
-      const token = localStorage.getItem("handsoff_token");
-
-      const response = await fetch(
-        API_BASE_URL + `/api/stock-counts/${selectedCount.id}/complete`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer " + token,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || "Stok sayımı tamamlanamadı.");
-        return;
-      }
-
-      setMessage("Stok sayımı tamamlandı ve stoklar güncellendi.");
-
-      if (data.stockCount) {
-        openCount(data.stockCount);
-      }
-
-      await fetchStockCounts();
-    } catch {
-      setError("Stok sayımı tamamlanırken backend bağlantısı kurulamadı.");
-    } finally {
-      setCompleting(false);
-    }
-  }
+    return counts.filter((item) => getStatus(item) === selectedStatus);
+  }, [counts, selectedStatus]);
 
   const summary = useMemo(() => {
-    const lines = selectedCount?.lines || [];
+    const ok = counts.filter((item) => getStatus(item) === "OK").length;
+    const short = counts.filter((item) => getStatus(item) === "SHORT").length;
+    const excess = counts.filter((item) => getStatus(item) === "EXCESS").length;
 
-    return lines.reduce(
-      (total, line) => {
-        total.totalLines += 1;
-
-        if (line.countedStock !== null && line.countedStock !== undefined) {
-          total.countedLines += 1;
-        }
-
-        const difference = Number(line.difference || 0);
-
-        if (difference > 0) {
-          total.positiveDifference += difference;
-        }
-
-        if (difference < 0) {
-          total.negativeDifference += difference;
-        }
-
-        return total;
-      },
-      {
-        totalLines: 0,
-        countedLines: 0,
-        positiveDifference: 0,
-        negativeDifference: 0,
-      }
-    );
-  }, [selectedCount]);
-
-  const draftSummary = useMemo(() => {
-    const draftCounts = stockCounts.filter((count) => count.status === "DRAFT");
-    const completedCounts = stockCounts.filter(
-      (count) => count.status === "COMPLETED"
-    );
+    const totalDifference = counts.reduce((sum, item) => {
+      return sum + getAbsDifference(item);
+    }, 0);
 
     return {
-      draft: draftCounts.length,
-      completed: completedCounts.length,
-      total: stockCounts.length,
+      total: counts.length,
+      ok,
+      short,
+      excess,
+      totalDifference,
     };
-  }, [stockCounts]);
+  }, [counts]);
 
   return (
-    <div className="page">
-      <div className="hero">
-        <div className="hero-content">
-          <div>
-            <p className="eyebrow">HandsOff / {user.restaurantName}</p>
+    <main style={styles.page}>
+      <section style={styles.hero}>
+        <div>
+          <p style={styles.eyebrow}>HandsOff Stok Kontrolü</p>
+          <h1 style={styles.title}>Stok Sayım</h1>
+          <p style={styles.subtitle}>
+            Sistemde görünen stok ile fiziksel sayım arasındaki farkı takip edin. Eksik, fazla ve doğru sayımları tek ekrandan yönetin.
+          </p>
+        </div>
 
-            <h1>Stok Sayımı</h1>
+        <div style={styles.heroCard}>
+          <span style={styles.heroLabel}>Toplam Sayım Farkı</span>
+          <strong style={summary.totalDifference === 0 ? styles.heroValueOk : styles.heroValueWarn}>
+            {summary.totalDifference.toFixed(2)}
+          </strong>
+          <small style={source === "api" ? styles.heroNoteOk : styles.heroNoteWarn}>
+            {source === "api" ? "Backend verisi kullanılıyor" : "Örnek veri gösteriliyor"}
+          </small>
+        </div>
+      </section>
 
-            <p>
-              Sistem stoğunu gör, gerçek sayımı gir, farkı hesapla ve sayımı
-              tamamlayınca stok miktarlarını otomatik güncelle.
-            </p>
+      <section style={styles.kpiGrid}>
+        <KpiCard title="Toplam Sayım" value={summary.total} note="Kontrol edilen ürün sayısı" />
+        <KpiCard title="Doğru" value={summary.ok} note="Sistem ve fiziksel stok eşleşiyor" />
+        <KpiCard title="Eksik" value={summary.short} note="Fiziksel stok sistemden az" tone="danger" />
+        <KpiCard title="Fazla" value={summary.excess} note="Fiziksel stok sistemden fazla" tone="warning" />
+      </section>
+
+      <section style={styles.createGrid}>
+        <article style={styles.panel}>
+          <h2 style={styles.panelTitle}>Yeni Stok Sayımı Gir</h2>
+          <p style={styles.panelText}>Ürün için sistem miktarı ve fiziksel sayım miktarını girin.</p>
+
+          <form onSubmit={handleCreateCount} style={styles.formGrid}>
+            <input
+              style={styles.input}
+              placeholder="Ürün adı"
+              value={form.productName}
+              onChange={(event) => setForm({ ...form, productName: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Kategori"
+              value={form.category}
+              onChange={(event) => setForm({ ...form, category: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Birim"
+              value={form.unit}
+              onChange={(event) => setForm({ ...form, unit: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Sistemdeki miktar"
+              type="number"
+              step="0.01"
+              value={form.systemQuantity}
+              onChange={(event) => setForm({ ...form, systemQuantity: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Sayılan miktar"
+              type="number"
+              step="0.01"
+              value={form.countedQuantity}
+              onChange={(event) => setForm({ ...form, countedQuantity: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Sayan kişi / bölüm"
+              value={form.countedBy}
+              onChange={(event) => setForm({ ...form, countedBy: event.target.value })}
+            />
+
+            <textarea
+              style={styles.textarea}
+              placeholder="Sayım notu"
+              value={form.note}
+              onChange={(event) => setForm({ ...form, note: event.target.value })}
+            />
+
+            <button type="submit" style={styles.buttonWide} disabled={saving}>
+              {saving ? "Kaydediliyor..." : "Sayımı Kaydet"}
+            </button>
+          </form>
+
+          {formMessage ? <div style={styles.infoMessage}>{formMessage}</div> : null}
+        </article>
+
+        <article style={styles.panel}>
+          <h2 style={styles.panelTitle}>Sayım Farkı Mantığı</h2>
+          <p style={styles.panelText}>Ekranın hesaplama yöntemi.</p>
+
+          <div style={styles.flowList}>
+            <FlowItem title="Sistem Miktarı" text="Panelde kayıtlı görünen stok miktarıdır." />
+            <FlowItem title="Sayılan Miktar" text="Depo, mutfak veya barda fiziksel olarak bulunan miktardır." />
+            <FlowItem title="Fark" text="Sayılan miktar - sistem miktarı olarak hesaplanır." />
+            <FlowItem title="Durum" text="Fark sıfırsa doğru, eksi ise eksik, artı ise fazla gösterilir." />
           </div>
+        </article>
+      </section>
 
-          <button
-            className="hero-button"
-            type="button"
-            onClick={fetchStockCounts}
+      <section style={styles.toolbar}>
+        <div>
+          <h2 style={styles.panelTitle}>Sayım Listesi</h2>
+          <p style={styles.panelText}>Sayım farklarını durumuna göre filtreleyin.</p>
+        </div>
+
+        <div style={styles.actions}>
+          <select
+            value={selectedStatus}
+            onChange={(event) => setSelectedStatus(event.target.value)}
+            style={styles.select}
           >
+            <option value="ALL">Tüm Durumlar</option>
+            <option value="OK">Doğru</option>
+            <option value="SHORT">Eksik</option>
+            <option value="EXCESS">Fazla</option>
+          </select>
+
+          <button type="button" onClick={fetchCounts} style={styles.button}>
             Yenile
           </button>
         </div>
-      </div>
+      </section>
 
-      {message && (
-        <div
-          className="error-box"
-          style={{
-            color: "#166534",
-            background: "#f0fdf4",
-            borderColor: "#bbf7d0",
-          }}
-        >
-          {message}
-        </div>
+      {loading ? (
+        <section style={styles.stateBox}>Stok sayımları yükleniyor...</section>
+      ) : (
+        <>
+          {error ? <section style={styles.warningBox}>{error}</section> : null}
+
+          <section style={styles.grid}>
+            {filteredCounts.map((item) => {
+              const status = getStatus(item);
+              const difference = getDifference(item);
+
+              return (
+                <article key={item.id || item.productName} style={styles.card}>
+                  <div style={styles.cardTop}>
+                    <div>
+                      <h3 style={styles.cardTitle}>{item.productName || item.name || "Ürün"}</h3>
+                      <p style={styles.cardText}>
+                        {item.category || "Kategori yok"} · {item.countDate || item.createdAt || "Tarih yok"}
+                      </p>
+                    </div>
+
+                    <span style={{ ...styles.badge, ...getStatusStyle(status) }}>
+                      {getStatusLabel(status)}
+                    </span>
+                  </div>
+
+                  <div style={styles.diffBox}>
+                    <span>Sayım Farkı</span>
+                    <strong style={difference < 0 ? styles.diffNegative : difference > 0 ? styles.diffPositive : styles.diffOk}>
+                      {difference > 0 ? "+" : ""}
+                      {difference.toFixed(2)} {item.unit || "adet"}
+                    </strong>
+                  </div>
+
+                  <div style={styles.metaGrid}>
+                    <div style={styles.metaBox}>
+                      <span>Sistemde</span>
+                      <strong>
+                        {getSystemQuantity(item)} {item.unit || "adet"}
+                      </strong>
+                    </div>
+
+                    <div style={styles.metaBox}>
+                      <span>Sayılan</span>
+                      <strong>
+                        {getCountedQuantity(item)} {item.unit || "adet"}
+                      </strong>
+                    </div>
+
+                    <div style={styles.metaBox}>
+                      <span>Sayan</span>
+                      <strong>{item.countedBy || item.owner || "Belirtilmedi"}</strong>
+                    </div>
+
+                    <div style={styles.metaBox}>
+                      <span>Not</span>
+                      <strong>{item.note || "Not yok"}</strong>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+        </>
       )}
+    </main>
+  );
+}
 
-      {error && <div className="error-box">{error}</div>}
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-          gap: 18,
-        }}
+function KpiCard({ title, value, note, tone }) {
+  return (
+    <article style={styles.kpiCard}>
+      <span style={styles.kpiTitle}>{title}</span>
+      <strong
+        style={
+          tone === "danger"
+            ? styles.kpiValueDanger
+            : tone === "warning"
+              ? styles.kpiValueWarn
+              : styles.kpiValue
+        }
       >
-        <div className="stat-card">
-          <p>Toplam Sayım</p>
-          <h3>{draftSummary.total}</h3>
-          <span>Oluşturulan stok sayımı</span>
-        </div>
+        {value}
+      </strong>
+      <small style={styles.kpiNote}>{note}</small>
+    </article>
+  );
+}
 
-        <div className="stat-card">
-          <p>Açık Sayım</p>
-          <h3>{draftSummary.draft}</h3>
-          <span>Tamamlanmayı bekleyen</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Tamamlanan</p>
-          <h3>{draftSummary.completed}</h3>
-          <span>Stoklara işlenmiş sayım</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Seçili Sayım</p>
-          <h3>{selectedCount ? selectedCount.status : "-"}</h3>
-          <span>{selectedCount ? selectedCount.countNo : "Sayım seçilmedi"}</span>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Yeni Stok Sayımı Oluştur</h2>
-
-            <p className="panel-sub">
-              Yeni sayım oluşturunca aktif stok kartları otomatik satırlara
-              eklenir.
-            </p>
-          </div>
-
-          <span className="mini-pill">Sayım başlangıcı</span>
-        </div>
-
-        <form onSubmit={handleCreateCount}>
-          <table className="module-table">
-            <tbody>
-              <tr>
-                <td>Sayım No</td>
-                <td>
-                  <input
-                    name="countNo"
-                    value={form.countNo}
-                    onChange={handleFormChange}
-                    placeholder="Boş bırakırsan otomatik oluşur"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-
-              <tr>
-                <td>Sayım Tarihi</td>
-                <td>
-                  <input
-                    type="date"
-                    name="countDate"
-                    value={form.countDate}
-                    onChange={handleFormChange}
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-
-              <tr>
-                <td>Not</td>
-                <td>
-                  <textarea
-                    name="note"
-                    value={form.note}
-                    onChange={handleFormChange}
-                    rows="3"
-                    placeholder="Örn: Ay sonu genel depo sayımı"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <button
-            className="hero-button"
-            type="submit"
-            disabled={creating}
-            style={{ marginTop: 18 }}
-          >
-            {creating ? "Oluşturuluyor..." : "Stok Sayımı Oluştur"}
-          </button>
-        </form>
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Stok Sayımları</h2>
-
-            <p className="panel-sub">
-              Açık veya tamamlanmış sayımları buradan seçebilirsin.
-            </p>
-          </div>
-
-          <span className="mini-pill">{stockCounts.length} kayıt</span>
-        </div>
-
-        <table className="module-table">
-          <thead>
-            <tr>
-              <th>İşlem</th>
-              <th>Sayım No</th>
-              <th>Tarih</th>
-              <th>Durum</th>
-              <th>Satır</th>
-              <th>Not</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan="6">Stok sayımları yükleniyor...</td>
-              </tr>
-            ) : stockCounts.length === 0 ? (
-              <tr>
-                <td colSpan="6">
-                  Henüz stok sayımı yok. Önce Stok Yönetimi’nde stok kartı
-                  olmalı.
-                </td>
-              </tr>
-            ) : (
-              stockCounts.map((count) => (
-                <tr key={count.id}>
-                  <td>
-                    <button
-                      type="button"
-                      className="hero-button"
-                      onClick={() => openCount(count)}
-                      style={{ padding: "8px 12px", borderRadius: 12 }}
-                    >
-                      Aç
-                    </button>
-                  </td>
-
-                  <td>{count.countNo}</td>
-                  <td>{formatDate(count.countDate)}</td>
-                  <td>{count.status === "COMPLETED" ? "Tamamlandı" : "Açık"}</td>
-                  <td>{count.lines?.length || 0}</td>
-                  <td>{count.note || "-"}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {selectedCount && (
-        <div className="panel">
-          <div className="panel-head">
-            <div>
-              <h2>Seçili Sayım: {selectedCount.countNo}</h2>
-
-              <p className="panel-sub">
-                Sistem stoğu ile gerçek sayım arasındaki fark burada hesaplanır.
-              </p>
-            </div>
-
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <span className="mini-pill">
-                {summary.countedLines} / {summary.totalLines} sayıldı
-              </span>
-
-              {selectedCount.status !== "COMPLETED" && (
-                <button
-                  className="hero-button"
-                  type="button"
-                  onClick={handleCompleteCount}
-                  disabled={completing}
-                  style={{ background: "#166534" }}
-                >
-                  {completing ? "Tamamlanıyor..." : "Sayımı Tamamla"}
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: 18,
-              marginBottom: 18,
-            }}
-          >
-            <div className="stat-card">
-              <p>Sayım Satırı</p>
-              <h3>{summary.totalLines}</h3>
-              <span>Toplam stok kalemi</span>
-            </div>
-
-            <div className="stat-card">
-              <p>Sayılan</p>
-              <h3>{summary.countedLines}</h3>
-              <span>Gerçek stok girilmiş</span>
-            </div>
-
-            <div className="stat-card">
-              <p>Fazla</p>
-              <h3>{formatNumber(summary.positiveDifference)}</h3>
-              <span>Sistemden fazla çıkan</span>
-            </div>
-
-            <div className="stat-card">
-              <p>Eksik</p>
-              <h3>{formatNumber(summary.negativeDifference)}</h3>
-              <span>Sistemden eksik çıkan</span>
-            </div>
-          </div>
-
-          <table className="module-table">
-            <thead>
-              <tr>
-                <th>İşlem</th>
-                <th>Stok</th>
-                <th>Kategori</th>
-                <th>Sistem Stoğu</th>
-                <th>Gerçek Sayım</th>
-                <th>Fark</th>
-                <th>Birim</th>
-                <th>Not</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {(selectedCount.lines || []).length === 0 ? (
-                <tr>
-                  <td colSpan="8">
-                    Bu sayımda satır yok. Önce Stok Yönetimi’nde stok kartı
-                    oluştur.
-                  </td>
-                </tr>
-              ) : (
-                selectedCount.lines.map((line) => {
-                  const draft = lineDrafts[line.id] || {
-                    countedStock: "",
-                    note: "",
-                  };
-
-                  const draftCounted =
-                    draft.countedStock === "" ? null : Number(draft.countedStock);
-
-                  const visualDifference =
-                    draftCounted === null
-                      ? Number(line.difference || 0)
-                      : draftCounted - Number(line.systemStock || 0);
-
-                  return (
-                    <tr key={line.id}>
-                      <td>
-                        {selectedCount.status === "COMPLETED" ? (
-                          "Kilitli"
-                        ) : (
-                          <button
-                            type="button"
-                            className="hero-button"
-                            onClick={() => handleSaveLine(line)}
-                            disabled={savingLineId === line.id}
-                            style={{ padding: "8px 12px", borderRadius: 12 }}
-                          >
-                            {savingLineId === line.id ? "Kaydediliyor" : "Kaydet"}
-                          </button>
-                        )}
-                      </td>
-
-                      <td>{line.inventoryItem?.name || "-"}</td>
-                      <td>{line.inventoryItem?.category || "-"}</td>
-                      <td>{formatNumber(line.systemStock)}</td>
-
-                      <td>
-                        <input
-                          type="number"
-                          value={draft.countedStock}
-                          disabled={selectedCount.status === "COMPLETED"}
-                          onChange={(event) =>
-                            handleLineDraftChange(
-                              line.id,
-                              "countedStock",
-                              event.target.value
-                            )
-                          }
-                          placeholder="Gerçek sayım"
-                          style={{
-                            width: "100%",
-                            padding: 10,
-                            borderRadius: 12,
-                            border: "1px solid #cbd5e1",
-                          }}
-                        />
-                      </td>
-
-                      <td>{formatNumber(visualDifference)}</td>
-                      <td>{line.unit}</td>
-
-                      <td>
-                        <input
-                          value={draft.note}
-                          disabled={selectedCount.status === "COMPLETED"}
-                          onChange={(event) =>
-                            handleLineDraftChange(line.id, "note", event.target.value)
-                          }
-                          placeholder="Satır notu"
-                          style={{
-                            width: "100%",
-                            padding: 10,
-                            borderRadius: 12,
-                            border: "1px solid #cbd5e1",
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+function FlowItem({ title, text }) {
+  return (
+    <div style={styles.flowItem}>
+      <strong>{title}</strong>
+      <span>{text}</span>
     </div>
   );
 }
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    padding: "28px",
+    color: "#f8fafc",
+    background:
+      "radial-gradient(circle at top left, #1e3a8a 0, transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 48%, #020617 100%)",
+  },
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "1fr 340px",
+    gap: "20px",
+    alignItems: "stretch",
+    marginBottom: "20px",
+  },
+  eyebrow: {
+    margin: 0,
+    color: "#bfdbfe",
+    fontSize: "12px",
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+    fontWeight: 800,
+  },
+  title: {
+    margin: "8px 0",
+    fontSize: "40px",
+    lineHeight: 1.05,
+  },
+  subtitle: {
+    margin: 0,
+    maxWidth: "780px",
+    color: "#cbd5e1",
+    lineHeight: 1.6,
+    fontSize: "15px",
+  },
+  heroCard: {
+    padding: "22px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(255,255,255,0.13)",
+    boxShadow: "0 24px 80px rgba(0,0,0,0.35)",
+  },
+  heroLabel: {
+    display: "block",
+    color: "#cbd5e1",
+    fontSize: "13px",
+    marginBottom: "10px",
+  },
+  heroValueOk: {
+    display: "block",
+    fontSize: "36px",
+    color: "#bbf7d0",
+  },
+  heroValueWarn: {
+    display: "block",
+    fontSize: "36px",
+    color: "#fde68a",
+  },
+  heroNoteOk: {
+    display: "inline-block",
+    marginTop: "10px",
+    color: "#bbf7d0",
+    background: "rgba(34,197,94,0.16)",
+    padding: "6px 10px",
+    borderRadius: "999px",
+  },
+  heroNoteWarn: {
+    display: "inline-block",
+    marginTop: "10px",
+    color: "#fde68a",
+    background: "rgba(245,158,11,0.18)",
+    padding: "6px 10px",
+    borderRadius: "999px",
+  },
+  kpiGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: "16px",
+    marginBottom: "18px",
+  },
+  kpiCard: {
+    padding: "18px",
+    borderRadius: "20px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  kpiTitle: {
+    display: "block",
+    color: "#cbd5e1",
+    fontSize: "13px",
+    marginBottom: "10px",
+  },
+  kpiValue: {
+    display: "block",
+    fontSize: "30px",
+    color: "#ffffff",
+  },
+  kpiValueDanger: {
+    display: "block",
+    fontSize: "30px",
+    color: "#fecaca",
+  },
+  kpiValueWarn: {
+    display: "block",
+    fontSize: "30px",
+    color: "#fde68a",
+  },
+  kpiNote: {
+    display: "block",
+    color: "#94a3b8",
+    marginTop: "8px",
+  },
+  createGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "16px",
+    marginBottom: "16px",
+  },
+  panel: {
+    padding: "20px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  panelTitle: {
+    margin: 0,
+    fontSize: "21px",
+  },
+  panelText: {
+    margin: "6px 0 14px",
+    color: "#94a3b8",
+    fontSize: "13px",
+  },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "10px",
+  },
+  input: {
+    height: "42px",
+    borderRadius: "14px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "#0f172a",
+    color: "#f8fafc",
+    padding: "0 12px",
+    outline: "none",
+  },
+  textarea: {
+    gridColumn: "1 / -1",
+    minHeight: "78px",
+    borderRadius: "14px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "#0f172a",
+    color: "#f8fafc",
+    padding: "12px",
+    outline: "none",
+    resize: "vertical",
+  },
+  buttonWide: {
+    gridColumn: "1 / -1",
+    height: "44px",
+    border: 0,
+    borderRadius: "14px",
+    padding: "0 16px",
+    background: "linear-gradient(135deg, #3b82f6, #6366f1)",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  infoMessage: {
+    marginTop: "12px",
+    padding: "12px",
+    borderRadius: "14px",
+    color: "#bfdbfe",
+    background: "rgba(59,130,246,0.16)",
+    border: "1px solid rgba(59,130,246,0.22)",
+  },
+  flowList: {
+    display: "grid",
+    gap: "10px",
+  },
+  flowItem: {
+    display: "grid",
+    gap: "5px",
+    padding: "14px",
+    borderRadius: "16px",
+    background: "rgba(15,23,42,0.55)",
+    color: "#cbd5e1",
+  },
+  toolbar: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "16px",
+    alignItems: "center",
+    padding: "20px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    marginBottom: "16px",
+  },
+  actions: {
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+  },
+  select: {
+    height: "42px",
+    minWidth: "180px",
+    borderRadius: "14px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "#0f172a",
+    color: "#f8fafc",
+    padding: "0 12px",
+    outline: "none",
+  },
+  button: {
+    height: "42px",
+    border: 0,
+    borderRadius: "14px",
+    padding: "0 16px",
+    background: "linear-gradient(135deg, #3b82f6, #6366f1)",
+    color: "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  warningBox: {
+    padding: "16px",
+    borderRadius: "18px",
+    background: "rgba(245,158,11,0.12)",
+    border: "1px solid rgba(245,158,11,0.2)",
+    color: "#fde68a",
+    marginBottom: "16px",
+  },
+  stateBox: {
+    padding: "22px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    color: "#cbd5e1",
+    marginBottom: "16px",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "16px",
+  },
+  card: {
+    padding: "20px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  cardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "14px",
+    alignItems: "flex-start",
+    marginBottom: "16px",
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: "20px",
+  },
+  cardText: {
+    margin: "7px 0 0",
+    color: "#cbd5e1",
+    lineHeight: 1.55,
+    fontSize: "13px",
+  },
+  diffBox: {
+    display: "grid",
+    gap: "6px",
+    padding: "16px",
+    borderRadius: "18px",
+    background: "rgba(15,23,42,0.55)",
+    marginBottom: "14px",
+  },
+  diffNegative: {
+    color: "#fecaca",
+    fontSize: "26px",
+  },
+  diffPositive: {
+    color: "#fde68a",
+    fontSize: "26px",
+  },
+  diffOk: {
+    color: "#bbf7d0",
+    fontSize: "26px",
+  },
+  metaGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "12px",
+  },
+  metaBox: {
+    display: "grid",
+    gap: "6px",
+    padding: "14px",
+    borderRadius: "16px",
+    background: "rgba(15,23,42,0.45)",
+  },
+  badge: {
+    flex: "0 0 auto",
+    padding: "7px 11px",
+    borderRadius: "999px",
+    fontSize: "12px",
+    fontWeight: 900,
+  },
+  badgeOk: {
+    color: "#bbf7d0",
+    background: "rgba(34,197,94,0.16)",
+  },
+  badgeWarn: {
+    color: "#fde68a",
+    background: "rgba(245,158,11,0.18)",
+  },
+  badgeError: {
+    color: "#fecaca",
+    background: "rgba(239,68,68,0.18)",
+  },
+  badgeBlue: {
+    color: "#bfdbfe",
+    background: "rgba(59,130,246,0.18)",
+  },
+};
+
+export default StockCountPage;

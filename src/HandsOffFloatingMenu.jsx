@@ -6,7 +6,7 @@ const menuGroups = [
     title: "Genel",
     items: [
       {
-        label: "YÃƒÂ¶netim Ãƒâ€“zeti",
+        label: "YÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶netim ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“zeti",
         permission: "canViewReports",
       },
       {
@@ -22,15 +22,15 @@ const menuGroups = [
         permission: "canManageSettings",
       },
       {
-        label: "KullanÃ„Â±cÃ„Â± Rolleri / Yetkilendirme",
+        label: "KullanÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±cÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â± Rolleri / Yetkilendirme",
         permission: "canManageSettings",
       },
       {
-        label: "Sistem SaÃ„Å¸lÃ„Â±k KontrolÃƒÂ¼",
+        label: "Sistem SaÃƒÆ’Ã¢â‚¬ÂÃƒâ€¦Ã‚Â¸lÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±k KontrolÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼",
         permission: "canManageSettings",
       },
       {
-        label: "Veri Yedekleme / DÃ„Â±Ã…Å¸a Aktarma",
+        label: "Veri Yedekleme / DÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸a Aktarma",
         permission: "canManageSettings",
       },
     ],
@@ -39,43 +39,43 @@ const menuGroups = [
     title: "Finans",
     items: [
       {
-        label: "GÃƒÂ¼nlÃƒÂ¼k Ciro / Gelir GiriÃ…Å¸i",
+        label: "GÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼nlÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼k Ciro / Gelir GiriÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸i",
         permission: "canManageFinance",
       },
       {
-        label: "GÃƒÂ¼n Sonu Raporu",
+        label: "GÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼n Sonu Raporu",
         permission: "canViewReports",
       },
       {
-        label: "GÃƒÂ¼nlÃƒÂ¼k Kontrol Listesi",
+        label: "GÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼nlÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼k Kontrol Listesi",
         permission: "canManageFinance",
       },
       {
-        label: "HaftalÃ„Â±k YÃƒÂ¶netim Raporu",
+        label: "HaftalÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±k YÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶netim Raporu",
         permission: "canViewReports",
       },
       {
-        label: "AylÃ„Â±k YÃƒÂ¶netim Raporu",
+        label: "AylÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±k YÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶netim Raporu",
         permission: "canViewReports",
       },
       {
-        label: "Aksiyon Takip / YÃƒÂ¶netim GÃƒÂ¶revleri",
+        label: "Aksiyon Takip / YÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶netim GÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶revleri",
         permission: "canViewReports",
       },
       {
-        label: "Nakit AkÃ„Â±Ã…Å¸Ã„Â± / Kasa Banka",
+        label: "Nakit AkÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â± / Kasa Banka",
         permission: "canManageFinance",
       },
       {
-        label: "KÃƒÂ¢r Zarar",
+        label: "KÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢r Zarar",
         permission: "canViewReports",
       },
       {
-        label: "Gider YÃƒÂ¶netimi",
+        label: "Gider YÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶netimi",
         permission: "canManageFinance",
       },
       {
-        label: "TedarikÃƒÂ§i Cari / BorÃƒÂ§ Takibi",
+        label: "TedarikÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§i Cari / BorÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ Takibi",
         permission: "canManageSuppliers",
       },
     ],
@@ -84,23 +84,23 @@ const menuGroups = [
     title: "Tedarik & Stok",
     items: [
       {
-        label: "TedarikÃƒÂ§iler",
+        label: "TedarikÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§iler",
         permission: "canManageSuppliers",
       },
       {
-        label: "SatÃ„Â±n Alma Talepleri",
+        label: "SatÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±n Alma Talepleri",
         permission: "canManageSuppliers",
       },
       {
-        label: "Stok YÃƒÂ¶netimi",
+        label: "Stok YÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶netimi",
         permission: "canManageStock",
       },
       {
-        label: "Stok SayÃ„Â±mÃ„Â±",
+        label: "Stok SayÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±mÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±",
         permission: "canManageStock",
       },
       {
-        label: "Zayi / KÃ„Â±rÃ„Â±lma",
+        label: "Zayi / KÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±rÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±lma",
         permission: "canManageStock",
       },
     ],
@@ -113,15 +113,15 @@ const menuGroups = [
         permission: "operation",
       },
       {
-        label: "SipariÃ…Å¸ler",
+        label: "SipariÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸ler",
         permission: "operation",
       },
       {
-        label: "GÃƒÂ¶revler",
+        label: "GÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶revler",
         permission: "operation",
       },
       {
-        label: "MÃƒÂ¼Ã…Å¸teriler",
+        label: "MÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸teriler",
         permission: "operation",
       },
       {
@@ -134,7 +134,7 @@ const menuGroups = [
 
 const fallbackOwner = {
   id: "fallback-owner",
-  fullName: "Ã„Â°Ã…Å¸letme Sahibi",
+  fullName: "ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸letme Sahibi",
   email: "",
   role: "OWNER",
   status: "ACTIVE",
@@ -161,12 +161,12 @@ function getSessionUser() {
 
 function getRoleName(role) {
   const names = {
-    OWNER: "Ã„Â°Ã…Å¸letme Sahibi",
+    OWNER: "ÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€¦Ã‚Â¸letme Sahibi",
     ACCOUNTING: "Muhasebe",
     KITCHEN: "Mutfak",
     BAR: "Bar",
     WAITER: "Garson",
-    READONLY: "Sadece GÃƒÂ¶rÃƒÂ¼ntÃƒÂ¼leme",
+    READONLY: "Sadece GÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶rÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼leme",
   };
 
   return names[role] || role || "Rol Yok";
@@ -195,13 +195,15 @@ function canSeeItem(member, permission) {
 }
 
 function goTo(page) {
-  localStorage.setItem("handsoff_last_requested_page", page);
+  const safePage =
+    typeof page === "string"
+      ? page
+      : page?.page || page?.label || page?.name || page?.title || "";
 
-  window.dispatchEvent(
-    new CustomEvent("handsoff:navigate", {
-      detail: page,
-    })
-  );
+  if (!safePage) return;
+
+  localStorage.setItem("handsoff_last_requested_page", safePage);
+  window.dispatchEvent(new CustomEvent("handsoff:navigate", { detail: safePage }));
 }
 
 export default function HandsOffFloatingMenu() {
@@ -230,14 +232,14 @@ export default function HandsOffFloatingMenu() {
 
       if (!response.ok) {
         setRoleUsers([]);
-        setError(data.message || "Roller alÃ„Â±namadÃ„Â±.");
+        setError(data.message || "Roller alÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±namadÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±.");
         return;
       }
 
       setRoleUsers(data.users || []);
     } catch {
       setRoleUsers([]);
-      setError("Rol listesi alÃ„Â±namadÃ„Â±.");
+      setError("Rol listesi alÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±namadÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±.");
     }
   }
 
@@ -292,7 +294,7 @@ export default function HandsOffFloatingMenu() {
           cursor: "pointer",
         }}
       >
-        MenÃƒÂ¼
+        MenÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼
       </button>
 
       {open && (
@@ -371,7 +373,7 @@ export default function HandsOffFloatingMenu() {
                   marginBottom: 6,
                 }}
               >
-                Yetki Ãƒâ€“nizleme
+                Yetki ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“nizleme
               </label>
 
               <select
@@ -384,7 +386,7 @@ export default function HandsOffFloatingMenu() {
                   padding: "10px 12px",
                 }}
               >
-                <option value="">Oturumdaki kullanÃ„Â±cÃ„Â± / Owner</option>
+                <option value="">Oturumdaki kullanÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±cÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â± / Owner</option>
 
                 {roleUsers.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -394,8 +396,8 @@ export default function HandsOffFloatingMenu() {
               </select>
 
               <p style={{ margin: "8px 0 0", color: "#6b7280", fontSize: 11 }}>
-                Bu alan yayÃ„Â±n ÃƒÂ¶ncesi test iÃƒÂ§indir. GerÃƒÂ§ek gÃƒÂ¼venlik iÃƒÂ§in backend
-                yetki kontrolÃƒÂ¼ ayrÃ„Â±ca baÃ„Å¸lanacak.
+                Bu alan yayÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±n ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶ncesi test iÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§indir. GerÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ek gÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼venlik iÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§in backend
+                yetki kontrolÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ ayrÃƒÆ’Ã¢â‚¬ÂÃƒâ€šÃ‚Â±ca baÃƒÆ’Ã¢â‚¬ÂÃƒâ€¦Ã‚Â¸lanacak.
               </p>
             </div>
           )}
@@ -469,7 +471,7 @@ export default function HandsOffFloatingMenu() {
                 color: "#6b7280",
               }}
             >
-              Bu rol iÃƒÂ§in gÃƒÂ¶rÃƒÂ¼ntÃƒÂ¼lenecek menÃƒÂ¼ bulunmuyor.
+              Bu rol iÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§in gÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¶rÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ntÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼lenecek menÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¼ bulunmuyor.
             </div>
           )}
         </div>

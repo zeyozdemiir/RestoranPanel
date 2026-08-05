@@ -1,7 +1,68 @@
-import { API_BASE_URL } from "./apiConfig";
 ﻿import { useEffect, useMemo, useState } from "react";
+import { API_BASE_URL } from "./apiConfig";
 
-function formatMoney(value) {
+const fallbackOrders = [
+  {
+    id: "po-1",
+    supplierName: "Et ve Şarküteri Tedarikçisi",
+    productName: "Dana ürünleri",
+    quantity: 12,
+    unit: "kg",
+    unitPrice: 1450,
+    totalAmount: 17400,
+    status: "OPEN",
+    priority: "HIGH",
+    orderDate: "Bugün",
+  },
+  {
+    id: "po-2",
+    supplierName: "Sebze Meyve Tedarikçisi",
+    productName: "Günlük sebze alımı",
+    quantity: 1,
+    unit: "parti",
+    unitPrice: 6800,
+    totalAmount: 6800,
+    status: "APPROVED",
+    priority: "MEDIUM",
+    orderDate: "Bugün",
+  },
+  {
+    id: "po-3",
+    supplierName: "İçecek Tedarikçisi",
+    productName: "Soğuk içecek takviyesi",
+    quantity: 24,
+    unit: "koli",
+    unitPrice: 850,
+    totalAmount: 20400,
+    status: "DELIVERED",
+    priority: "MEDIUM",
+    orderDate: "Bu hafta",
+  },
+];
+
+const emptyForm = {
+  supplierName: "",
+  productName: "",
+  quantity: "",
+  unit: "",
+  unitPrice: "",
+  priority: "MEDIUM",
+};
+
+const statusLabels = {
+  OPEN: "Açık",
+  APPROVED: "Onaylandı",
+  DELIVERED: "Teslim Alındı",
+  CANCELLED: "İptal",
+};
+
+const priorityLabels = {
+  HIGH: "Yüksek",
+  MEDIUM: "Orta",
+  LOW: "Düşük",
+};
+
+function formatCurrency(value) {
   return new Intl.NumberFormat("tr-TR", {
     style: "currency",
     currency: "TRY",
@@ -9,124 +70,50 @@ function formatMoney(value) {
   }).format(Number(value || 0));
 }
 
-function formatDate(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleDateString("tr-TR");
+function normalizeOrders(data) {
+  if (Array.isArray(data)) return data;
+  if (Array.isArray(data?.orders)) return data.orders;
+  if (Array.isArray(data?.purchaseOrders)) return data.purchaseOrders;
+  if (Array.isArray(data?.data)) return data.data;
+  return [];
 }
 
-function getDateInputValue(value) {
-  if (!value) return "";
-  return new Date(value).toISOString().slice(0, 10);
+function getTotal(order) {
+  return Number(order.totalAmount || order.total || Number(order.quantity || 0) * Number(order.unitPrice || 0));
 }
 
-function getPurchaseCategoryFromSupplier(supplierCategory) {
-  const categoryMap = {
-    Genel: "Stok / Satın Alma",
-    "Et / Tavuk": "Et / Tavuk",
-    Balık: "Balık",
-    "Sebze / Meyve": "Sebze / Meyve",
-    İçecek: "İçecek",
-    Alkol: "Alkol",
-    "Kuru Gıda": "Kuru Gıda",
-    Temizlik: "Temizlik",
-    "Teknik Servis": "Bakım / Onarım",
-    Pazarlama: "Pazarlama",
-    Diğer: "Diğer",
-  };
-
-  return categoryMap[supplierCategory] || "Stok / Satın Alma";
+function getStatusLabel(status) {
+  return statusLabels[status] || status || "Durum Yok";
 }
 
-const emptyForm = {
-  supplierId: "",
-  supplierName: "",
-  orderNo: "",
-  orderDate: "",
-  category: "Stok / Satın Alma",
-  itemName: "",
-  quantity: "1",
-  unit: "adet",
-  unitPrice: "",
-  totalAmount: "",
-  paymentStatus: "UNPAID",
-  status: "DRAFT",
-  note: "",
-};
+function getPriorityLabel(priority) {
+  return priorityLabels[priority] || priority || "Öncelik Yok";
+}
 
-const paymentStatusLabels = {
-  UNPAID: "Ödenmedi",
-  PAID: "Ödendi",
-  PARTIAL: "Kısmi Ödendi",
-};
+function getStatusStyle(status) {
+  if (status === "DELIVERED") return styles.badgeOk;
+  if (status === "APPROVED") return styles.badgeBlue;
+  if (status === "CANCELLED") return styles.badgeError;
+  return styles.badgeWarn;
+}
 
-const statusLabels = {
-  DRAFT: "Taslak",
-  APPROVED: "Onaylandı",
-  CANCELLED: "İptal",
-};
+function getPriorityStyle(priority) {
+  if (priority === "HIGH") return styles.priorityHigh;
+  if (priority === "LOW") return styles.priorityLow;
+  return styles.priorityMedium;
+}
 
-export default function PurchaseOrdersPage({ user }) {
-  const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
-  const [selectedOrder, setSelectedOrder] = useState(null);
+function PurchaseOrdersPage() {
+  const [orders, setOrders] = useState([]);
+  const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [form, setForm] = useState(emptyForm);
-  const [loading, setLoading] = useState(false);
+  const [source, setSource] = useState("api");
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [formMessage, setFormMessage] = useState("");
 
-  useEffect(() => {
-    fetchPurchaseOrders();
-    fetchSuppliers();
-    restoreDraft();
-  }, []);
-
-  useEffect(() => {
-    const hasDraftData =
-      form.supplierName ||
-      form.orderNo ||
-      form.orderDate ||
-      form.itemName ||
-      form.quantity !== "1" ||
-      form.unitPrice ||
-      form.totalAmount ||
-      form.note;
-
-    if (!selectedOrder && hasDraftData) {
-      localStorage.setItem(
-        "handsoff_purchase_order_draft",
-        JSON.stringify(form)
-      );
-    }
-  }, [form, selectedOrder]);
-
-  function restoreDraft() {
-    try {
-      const rawDraft = localStorage.getItem("handsoff_purchase_order_draft");
-
-      if (!rawDraft) {
-        return;
-      }
-
-      const draft = JSON.parse(rawDraft);
-
-      if (!draft || typeof draft !== "object") {
-        localStorage.removeItem("handsoff_purchase_order_draft");
-        return;
-      }
-
-      setForm({
-        ...emptyForm,
-        ...draft,
-      });
-
-      setMessage("Kaydedilmemiş satın alma talebi taslağın geri yüklendi.");
-    } catch {
-      localStorage.removeItem("handsoff_purchase_order_draft");
-    }
-  }
-
-  async function fetchPurchaseOrders() {
+  async function fetchOrders() {
     try {
       setLoading(true);
       setError("");
@@ -139,981 +126,627 @@ export default function PurchaseOrdersPage({ user }) {
         },
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        setError(data.message || "Satın alma talepleri alınamadı.");
+        setOrders(fallbackOrders);
+        setSource("demo");
+        setError("Backend satın alma siparişleri alınamadı. Ekran örnek verilerle gösteriliyor.");
         return;
       }
 
-      setPurchaseOrders(data.purchaseOrders || []);
+      const normalized = normalizeOrders(data);
+
+      if (normalized.length === 0) {
+        setOrders(fallbackOrders);
+        setSource("demo");
+        setError("Kayıtlı satın alma siparişi bulunamadı. Örnek liste gösteriliyor.");
+        return;
+      }
+
+      setOrders(normalized);
+      setSource("api");
     } catch {
-      setError("Backend bağlantısı kurulamadı.");
+      setOrders(fallbackOrders);
+      setSource("demo");
+      setError("Backend bağlantısı kurulamadı. Ekran örnek verilerle gösteriliyor.");
     } finally {
       setLoading(false);
     }
   }
 
-  async function fetchSuppliers() {
-    try {
-      const token = localStorage.getItem("handsoff_token");
+  useEffect(() => {
+    fetchOrders();
+  }, []);
 
-      const response = await fetch(API_BASE_URL + "/api/suppliers", {
-        headers: {
-          Authorization: "Bearer " + token,
-        },
-      });
+  async function handleCreateOrder(event) {
+    event.preventDefault();
 
-      const data = await response.json();
-
-      if (response.ok) {
-        setSuppliers(data.suppliers || []);
-      }
-    } catch {
-      setSuppliers([]);
+    if (!form.supplierName.trim() || !form.productName.trim()) {
+      setFormMessage("Tedarikçi adı ve ürün/hizmet adı zorunlu.");
+      return;
     }
-  }
 
-  function handleFormChange(event) {
-    const { name, value } = event.target;
-
-    setForm((currentForm) => ({
-      ...currentForm,
-      [name]: value,
-    }));
-  }
-
-  function handleNewOrder() {
-    localStorage.removeItem("handsoff_purchase_order_draft");
-    setSelectedOrder(null);
-    setForm(emptyForm);
-    setMessage("");
-    setError("");
-  }
-
-  function handleSelectSupplier(supplier) {
-    setForm((currentForm) => ({
-      ...currentForm,
-      supplierId: String(supplier.id),
-      supplierName: supplier.name,
-      category: getPurchaseCategoryFromSupplier(supplier.category),
-    }));
-  }
-
-  function handleSelectOrder(order) {
-    setSelectedOrder(order);
-    setMessage("");
-    setError("");
-
-    setForm({
-      supplierId: order.supplierId ? String(order.supplierId) : "",
-      supplierName: order.supplierName || "",
-      orderNo: order.orderNo || "",
-      orderDate: getDateInputValue(order.orderDate || order.createdAt),
-      category: order.category || "Stok / Satın Alma",
-      itemName: order.itemName || "",
-      quantity: String(order.quantity || "1"),
-      unit: order.unit || "adet",
-      unitPrice: String(order.unitPrice || ""),
-      totalAmount: String(order.totalAmount || ""),
-      paymentStatus: order.paymentStatus || "UNPAID",
-      status: order.status || "DRAFT",
-      note: order.note || "",
-    });
-  }
-
-  function calculateTotal() {
     const quantity = Number(form.quantity || 0);
     const unitPrice = Number(form.unitPrice || 0);
 
-    setForm((currentForm) => ({
-      ...currentForm,
-      totalAmount: String(quantity * unitPrice),
-    }));
-  }
-
-  async function handleSaveOrder(event) {
-    event.preventDefault();
-
-    if (!form.supplierName.trim()) {
-      setError("Lütfen tedarikçi seç veya tedarikçi adı yaz.");
-      return;
-    }
-
-    if (!form.itemName.trim()) {
-      setError("Lütfen ürün / kalem adı yaz.");
-      return;
-    }
+    const newOrder = {
+      id: "local-po-" + Date.now(),
+      supplierName: form.supplierName.trim(),
+      productName: form.productName.trim(),
+      quantity,
+      unit: form.unit.trim() || "adet",
+      unitPrice,
+      totalAmount: quantity * unitPrice,
+      status: "OPEN",
+      priority: form.priority,
+      orderDate: "Yeni sipariş",
+    };
 
     try {
       setSaving(true);
-      setError("");
-      setMessage("");
+      setFormMessage("");
 
       const token = localStorage.getItem("handsoff_token");
 
-      const url = selectedOrder
-        ? API_BASE_URL + `/api/purchase-orders/${selectedOrder.id}`
-        : API_BASE_URL + "/api/purchase-orders";
-
-      const method = selectedOrder ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method,
+      const response = await fetch(API_BASE_URL + "/api/purchase-orders", {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: "Bearer " + token,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify(newOrder),
       });
 
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
-      if (!response.ok) {
-        setError(data.message || "Satın alma talebi kaydedilemedi.");
-        return;
+      if (response.ok) {
+        const savedOrder = data.order || data.purchaseOrder || data.data || data || newOrder;
+        setOrders((current) => [savedOrder, ...current]);
+        setSource("api");
+        setFormMessage("Satın alma siparişi backend’e kaydedildi.");
+      } else {
+        setOrders((current) => [newOrder, ...current]);
+        setFormMessage("Backend kayıt almadı; sipariş geçici olarak ekranda gösteriliyor.");
       }
 
-      localStorage.removeItem("handsoff_purchase_order_draft");
-
-      setMessage(
-        selectedOrder
-          ? "Satın alma talebi güncellendi."
-          : "Satın alma talebi oluşturuldu."
-      );
-
-      setSelectedOrder(data.purchaseOrder || null);
-      await fetchPurchaseOrders();
-    } catch {
-      setError("Satın alma talebi kaydedilirken backend bağlantısı kurulamadı.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleCancelOrder(order) {
-    const confirmed = window.confirm(
-      "Bu satın alma talebi iptal edilecek. Devam edilsin mi?"
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError("");
-      setMessage("");
-
-      const token = localStorage.getItem("handsoff_token");
-
-      const response = await fetch(
-        API_BASE_URL + `/api/purchase-orders/${order.id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + token,
-          },
-          body: JSON.stringify({
-            status: "CANCELLED",
-            note: order.note
-              ? order.note + "\nSatın alma talebi iptal edildi."
-              : "Satın alma talebi iptal edildi.",
-          }),
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || "Satın alma talebi iptal edilemedi.");
-        return;
-      }
-
-      setMessage("Satın alma talebi iptal edildi.");
-      setSelectedOrder(null);
       setForm(emptyForm);
-      await fetchPurchaseOrders();
     } catch {
-      setError("Satın alma iptal edilirken backend bağlantısı kurulamadı.");
+      setOrders((current) => [newOrder, ...current]);
+      setFormMessage("Backend bağlantısı yok; sipariş geçici olarak ekranda gösteriliyor.");
+      setForm(emptyForm);
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleCreateStockMovement(order) {
-    const confirmed = window.confirm(
-      "Bu satın alma talebi stoğa aktarılacak. Devam edilsin mi?"
-    );
+  const filteredOrders = useMemo(() => {
+    if (selectedStatus === "ALL") return orders;
+    return orders.filter((order) => order.status === selectedStatus);
+  }, [orders, selectedStatus]);
 
-    if (!confirmed) {
-      return;
-    }
+  const summary = useMemo(() => {
+    const totalAmount = orders.reduce((sum, order) => sum + getTotal(order), 0);
+    const open = orders.filter((order) => order.status === "OPEN").length;
+    const approved = orders.filter((order) => order.status === "APPROVED").length;
+    const delivered = orders.filter((order) => order.status === "DELIVERED").length;
+    const high = orders.filter((order) => order.priority === "HIGH").length;
 
-    try {
-      setSaving(true);
-      setError("");
-      setMessage("");
-
-      const token = localStorage.getItem("handsoff_token");
-
-      const response = await fetch(
-        API_BASE_URL + `/api/purchase-orders/${order.id}/create-stock-movement`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer " + token,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || "Satın alma talebi stoğa aktarılamadı.");
-        return;
-      }
-
-      setMessage("Satın alma talebi stoğa aktarıldı.");
-      await fetchPurchaseOrders();
-    } catch {
-      setError("Stoğa aktarılırken backend bağlantısı kurulamadı.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleCreateExpense(order) {
-    const confirmed = window.confirm(
-      "Bu satın alma talebi Gider Yönetimi’ne aktarılacak. Devam edilsin mi?"
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError("");
-      setMessage("");
-
-      const token = localStorage.getItem("handsoff_token");
-
-      const response = await fetch(
-        API_BASE_URL + `/api/purchase-orders/${order.id}/create-expense`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: "Bearer " + token,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || "Satın alma giderlere aktarılamadı.");
-        return;
-      }
-
-      setMessage("Satın alma talebi Gider Yönetimi’ne aktarıldı.");
-      await fetchPurchaseOrders();
-    } catch {
-      setError("Giderlere aktarılırken backend bağlantısı kurulamadı.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const activeSuppliers = suppliers.filter((supplier) => supplier.isActive);
-
-  const activeOrders = purchaseOrders.filter(
-    (order) => order.status !== "CANCELLED"
-  );
-
-  const totalPurchaseAmount = activeOrders.reduce((total, order) => {
-    return total + Number(order.totalAmount || 0);
-  }, 0);
-
-  const unpaidAmount = activeOrders
-    .filter((order) => order.paymentStatus === "UNPAID")
-    .reduce((total, order) => total + Number(order.totalAmount || 0), 0);
-
-  const transferredAmount = activeOrders
-    .filter((order) => order.expenseCreated)
-    .reduce((total, order) => total + Number(order.totalAmount || 0), 0);
-
-  const waitingTransferCount = activeOrders.filter(
-    (order) => !order.expenseCreated
-  ).length;
-
-  const categorySummary = useMemo(() => {
-    const summaryMap = new Map();
-
-    activeOrders.forEach((order) => {
-      const category = order.category || "Stok / Satın Alma";
-      const current = summaryMap.get(category) || {
-        category,
-        count: 0,
-        totalAmount: 0,
-      };
-
-      current.count += 1;
-      current.totalAmount += Number(order.totalAmount || 0);
-
-      summaryMap.set(category, current);
-    });
-
-    return Array.from(summaryMap.values()).sort(
-      (a, b) => b.totalAmount - a.totalAmount
-    );
-  }, [purchaseOrders]);
-
-  const selectedSupplierInfo = suppliers.find(
-    (supplier) => supplier.name === form.supplierName
-  );
+    return {
+      total: orders.length,
+      totalAmount,
+      open,
+      approved,
+      delivered,
+      high,
+    };
+  }, [orders]);
 
   return (
-    <div className="page">
-      <div className="hero">
-        <div className="hero-content">
-          <div>
-            <p className="eyebrow">HandsOff / {user.restaurantName}</p>
+    <main style={styles.page}>
+      <section style={styles.hero}>
+        <div>
+          <p style={styles.eyebrow}>HandsOff Satın Alma</p>
+          <h1 style={styles.title}>Satın Alma Siparişleri</h1>
+          <p style={styles.subtitle}>
+            Tedarikçi siparişlerini, onay durumlarını, teslim alma sürecini ve toplam satın alma tutarını tek ekranda takip edin.
+          </p>
+        </div>
 
-            <h1>Satın Alma Talepleri</h1>
+        <div style={styles.heroCard}>
+          <span style={styles.heroLabel}>Toplam Sipariş Tutarı</span>
+          <strong style={styles.heroValue}>{formatCurrency(summary.totalAmount)}</strong>
+          <small style={source === "api" ? styles.heroNoteOk : styles.heroNoteWarn}>
+            {source === "api" ? "Backend verisi kullanılıyor" : "Örnek veri gösteriliyor"}
+          </small>
+        </div>
+      </section>
 
-            <p>
-              Tedarikçiden yapılan satın almaları, satın alma taleplerini ve giderlere
-              aktarılması gereken kayıtları buradan yönetebilirsin.
-            </p>
+      <section style={styles.kpiGrid}>
+        <KpiCard title="Toplam Sipariş" value={summary.total} note="Kayıtlı satın alma talebi" />
+        <KpiCard title="Açık" value={summary.open} note="Onay bekleyen siparişler" />
+        <KpiCard title="Onaylandı" value={summary.approved} note="Satın alma onayı verilenler" />
+        <KpiCard title="Teslim Alındı" value={summary.delivered} note="Kapanan satın alma kayıtları" />
+      </section>
+
+      <section style={styles.createGrid}>
+        <article style={styles.panel}>
+          <h2 style={styles.panelTitle}>Yeni Satın Alma Siparişi</h2>
+          <p style={styles.panelText}>Tedarikçi, ürün, miktar ve birim fiyat girerek yeni sipariş oluşturun.</p>
+
+          <form onSubmit={handleCreateOrder} style={styles.formGrid}>
+            <input
+              style={styles.input}
+              placeholder="Tedarikçi adı"
+              value={form.supplierName}
+              onChange={(event) => setForm({ ...form, supplierName: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Ürün / hizmet adı"
+              value={form.productName}
+              onChange={(event) => setForm({ ...form, productName: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Miktar"
+              type="number"
+              value={form.quantity}
+              onChange={(event) => setForm({ ...form, quantity: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Birim"
+              value={form.unit}
+              onChange={(event) => setForm({ ...form, unit: event.target.value })}
+            />
+
+            <input
+              style={styles.input}
+              placeholder="Birim fiyat"
+              type="number"
+              value={form.unitPrice}
+              onChange={(event) => setForm({ ...form, unitPrice: event.target.value })}
+            />
+
+            <select
+              style={styles.input}
+              value={form.priority}
+              onChange={(event) => setForm({ ...form, priority: event.target.value })}
+            >
+              <option value="HIGH">Yüksek Öncelik</option>
+              <option value="MEDIUM">Orta Öncelik</option>
+              <option value="LOW">Düşük Öncelik</option>
+            </select>
+
+            <button type="submit" style={styles.buttonWide} disabled={saving}>
+              {saving ? "Kaydediliyor..." : "Sipariş Oluştur"}
+            </button>
+          </form>
+
+          {formMessage ? <div style={styles.infoMessage}>{formMessage}</div> : null}
+        </article>
+
+        <article style={styles.panel}>
+          <h2 style={styles.panelTitle}>Satın Alma Akışı</h2>
+          <p style={styles.panelText}>Siparişlerin operasyon içindeki takip sırası.</p>
+
+          <div style={styles.flowList}>
+            <FlowItem title="1. Talep Açılır" text="Ürün, tedarikçi, miktar ve birim fiyat girilir." />
+            <FlowItem title="2. Yönetici Onayı" text="Açık sipariş yönetici tarafından kontrol edilir." />
+            <FlowItem title="3. Teslim Alma" text="Ürün geldiğinde teslim alındı durumuna çekilir." />
+            <FlowItem title="4. Cari Borç" text="Tutar tedarikçi cari hesabına yansıtılır." />
           </div>
+        </article>
+      </section>
 
-          <button
-            className="hero-button"
-            type="button"
-            onClick={() => {
-              fetchPurchaseOrders();
-              fetchSuppliers();
-            }}
+      <section style={styles.toolbar}>
+        <div>
+          <h2 style={styles.panelTitle}>Sipariş Listesi</h2>
+          <p style={styles.panelText}>Duruma göre satın alma siparişlerini filtreleyin.</p>
+        </div>
+
+        <div style={styles.actions}>
+          <select
+            value={selectedStatus}
+            onChange={(event) => setSelectedStatus(event.target.value)}
+            style={styles.select}
           >
+            <option value="ALL">Tüm Durumlar</option>
+            <option value="OPEN">Açık</option>
+            <option value="APPROVED">Onaylandı</option>
+            <option value="DELIVERED">Teslim Alındı</option>
+            <option value="CANCELLED">İptal</option>
+          </select>
+
+          <button type="button" onClick={fetchOrders} style={styles.button}>
             Yenile
           </button>
         </div>
-      </div>
+      </section>
 
-      {message && (
-        <div
-          className="error-box"
-          style={{
-            color: "#166534",
-            background: "#f0fdf4",
-            borderColor: "#bbf7d0",
-          }}
-        >
-          {message}
-        </div>
+      {loading ? (
+        <section style={styles.stateBox}>Satın alma siparişleri yükleniyor...</section>
+      ) : (
+        <>
+          {error ? <section style={styles.warningBox}>{error}</section> : null}
+
+          <section style={styles.grid}>
+            {filteredOrders.map((order) => (
+              <article key={order.id || order.productName} style={styles.card}>
+                <div style={styles.cardTop}>
+                  <div>
+                    <h3 style={styles.cardTitle}>{order.productName || order.title || "Sipariş"}</h3>
+                    <p style={styles.cardText}>{order.supplierName || order.supplier || "Tedarikçi belirtilmedi"}</p>
+                  </div>
+
+                  <span style={{ ...styles.badge, ...getStatusStyle(order.status) }}>
+                    {getStatusLabel(order.status)}
+                  </span>
+                </div>
+
+                <div style={styles.amountBox}>
+                  <span>Toplam Tutar</span>
+                  <strong>{formatCurrency(getTotal(order))}</strong>
+                </div>
+
+                <div style={styles.metaGrid}>
+                  <div style={styles.metaBox}>
+                    <span>Miktar</span>
+                    <strong>{order.quantity || 0} {order.unit || "adet"}</strong>
+                  </div>
+
+                  <div style={styles.metaBox}>
+                    <span>Birim Fiyat</span>
+                    <strong>{formatCurrency(order.unitPrice || 0)}</strong>
+                  </div>
+
+                  <div style={styles.metaBox}>
+                    <span>Tarih</span>
+                    <strong>{order.orderDate || order.createdAt || "Tarih Yok"}</strong>
+                  </div>
+
+                  <div style={styles.metaBox}>
+                    <span>Öncelik</span>
+                    <strong style={{ ...styles.priorityText, ...getPriorityStyle(order.priority) }}>
+                      {getPriorityLabel(order.priority)}
+                    </strong>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </section>
+        </>
       )}
+    </main>
+  );
+}
 
-      {error && <div className="error-box">{error}</div>}
+function KpiCard({ title, value, note }) {
+  return (
+    <article style={styles.kpiCard}>
+      <span style={styles.kpiTitle}>{title}</span>
+      <strong style={styles.kpiValue}>{value}</strong>
+      <small style={styles.kpiNote}>{note}</small>
+    </article>
+  );
+}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-          gap: 18,
-        }}
-      >
-        <div className="stat-card">
-          <p>Toplam Satın Alma</p>
-          <h3>{formatMoney(totalPurchaseAmount)}</h3>
-          <span>{activeOrders.length} aktif kayıt</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Ödenmemiş</p>
-          <h3>{formatMoney(unpaidAmount)}</h3>
-          <span>Tedarikçi borcu olarak takip edilir</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Gidere Aktarılan</p>
-          <h3>{formatMoney(transferredAmount)}</h3>
-          <span>Gider Yönetimi’ne düşen kayıtlar</span>
-        </div>
-
-        <div className="stat-card">
-          <p>Aktarım Bekleyen</p>
-          <h3>{waitingTransferCount}</h3>
-          <span>Gider Yönetimi’ne aktarılmamış kayıt</span>
-        </div>
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Kategori Özeti</h2>
-
-            <p className="panel-sub">
-              Satın alma taleplerinın kategori bazlı dağılımı.
-            </p>
-          </div>
-
-          <span className="mini-pill">{categorySummary.length} kategori</span>
-        </div>
-
-        <table className="module-table">
-          <thead>
-            <tr>
-              <th>Kategori</th>
-              <th>Kayıt</th>
-              <th>Toplam</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {categorySummary.length === 0 ? (
-              <tr>
-                <td colSpan="3">Henüz kategori özeti yok.</td>
-              </tr>
-            ) : (
-              categorySummary.map((item) => (
-                <tr key={item.category}>
-                  <td>{item.category}</td>
-                  <td>{item.count}</td>
-                  <td>{formatMoney(item.totalAmount)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>
-              {selectedOrder
-                ? "Satın Alma Talebinı Düzenle"
-                : "Yeni Satın Alma Talebi"}
-            </h2>
-
-            <p className="panel-sub">
-              Tedarikçi seç, ürün veya talep kalemini gir, toplamı hesapla ve
-              istersen Gider Yönetimi’ne aktar.
-            </p>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <span className="mini-pill">
-              {selectedOrder ? "Seçili Kayıt" : "Yeni Kayıt"}
-            </span>
-
-            <button
-              className="hero-button"
-              type="button"
-              onClick={handleNewOrder}
-            >
-              Yeni Satın Alma
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={handleSaveOrder}>
-          <table className="module-table">
-            <tbody>
-              <tr>
-                <td>Tedarikçi</td>
-                <td>
-                  <div style={{ display: "grid", gap: 12 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: 8,
-                        flexWrap: "wrap",
-                        padding: 12,
-                        borderRadius: 12,
-                        border: "1px solid #cbd5e1",
-                        background: "#f8fafc",
-                      }}
-                    >
-                      {activeSuppliers.length === 0 ? (
-                        <span style={{ color: "#64748b" }}>
-                          Aktif tedarikçi yok. Manuel yazabilirsin.
-                        </span>
-                      ) : (
-                        activeSuppliers.map((supplier) => (
-                          <button
-                            key={supplier.id}
-                            type="button"
-                            onClick={() => handleSelectSupplier(supplier)}
-                            style={{
-                              padding: "10px 14px",
-                              borderRadius: 12,
-                              border: "0",
-                              cursor: "pointer",
-                              fontWeight: 700,
-                              color: "#ffffff",
-                              background:
-                                form.supplierName === supplier.name
-                                  ? "#166534"
-                                  : "#0f172a",
-                            }}
-                          >
-                            {supplier.name}
-                            {supplier.iban ? " · IBAN var" : ""}
-                          </button>
-                        ))
-                      )}
-                    </div>
-
-                    <input
-                      name="supplierName"
-                      value={form.supplierName}
-                      onChange={handleFormChange}
-                      placeholder="Tedarikçiye tıkla ya da manuel tedarikçi adı yaz"
-                      style={{
-                        width: "100%",
-                        padding: 12,
-                        borderRadius: 12,
-                        border: "1px solid #cbd5e1",
-                      }}
-                    />
-
-                    {selectedSupplierInfo && (
-                      <div
-                        style={{
-                          display: "grid",
-                          gap: 6,
-                          padding: 12,
-                          borderRadius: 12,
-                          border: "1px solid #bbf7d0",
-                          background: "#f0fdf4",
-                          color: "#14532d",
-                        }}
-                      >
-                        <strong>Seçili Tedarikçi Bilgileri</strong>
-                        <span>Kategori: {selectedSupplierInfo.category || "-"}</span>
-                        <span>Vergi No: {selectedSupplierInfo.taxNumber || "-"}</span>
-                        <span>IBAN: {selectedSupplierInfo.iban || "-"}</span>
-                        <span>Yetkili: {selectedSupplierInfo.contactName || "-"}</span>
-                        <span>Telefon: {selectedSupplierInfo.phone || "-"}</span>
-                      </div>
-                    )}
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td>Talep No</td>
-                <td>
-                  <input
-                    name="orderNo"
-                    value={form.orderNo}
-                    onChange={handleFormChange}
-                    placeholder="Varsa talep numarası"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-
-              <tr>
-                <td>Talep Tarihi</td>
-                <td>
-                  <input
-                    type="date"
-                    name="orderDate"
-                    value={form.orderDate}
-                    onChange={handleFormChange}
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-
-              <tr>
-                <td>Kategori</td>
-                <td>
-                  <select
-                    name="category"
-                    value={form.category}
-                    onChange={handleFormChange}
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  >
-                    <option value="Stok / Satın Alma">Stok / Satın Alma</option>
-                    <option value="Et / Tavuk">Et / Tavuk</option>
-                    <option value="Balık">Balık</option>
-                    <option value="Sebze / Meyve">Sebze / Meyve</option>
-                    <option value="İçecek">İçecek</option>
-                    <option value="Alkol">Alkol</option>
-                    <option value="Kuru Gıda">Kuru Gıda</option>
-                    <option value="Temizlik">Temizlik</option>
-                    <option value="Bakım / Onarım">Bakım / Onarım</option>
-                    <option value="Pazarlama">Pazarlama</option>
-                    <option value="Diğer">Diğer</option>
-                  </select>
-                </td>
-              </tr>
-
-              <tr>
-                <td>Talep Edilen Ürün / Kalem</td>
-                <td>
-                  <input
-                    name="itemName"
-                    value={form.itemName}
-                    onChange={handleFormChange}
-                    placeholder="Örn: Dana bonfile, şarap, sebze kasası, temizlik ürünü"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-
-              <tr>
-                <td>Miktar</td>
-                <td>
-                  <input
-                    type="number"
-                    name="quantity"
-                    value={form.quantity}
-                    onChange={handleFormChange}
-                    placeholder="Miktar"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-
-              <tr>
-                <td>Birim</td>
-                <td>
-                  <select
-                    name="unit"
-                    value={form.unit}
-                    onChange={handleFormChange}
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  >
-                    <option value="adet">adet</option>
-                    <option value="kg">kg</option>
-                    <option value="gr">gr</option>
-                    <option value="lt">lt</option>
-                    <option value="ml">ml</option>
-                    <option value="koli">koli</option>
-                    <option value="şişe">şişe</option>
-                    <option value="paket">paket</option>
-                  </select>
-                </td>
-              </tr>
-
-              <tr>
-                <td>Birim Fiyat</td>
-                <td>
-                  <input
-                    type="number"
-                    name="unitPrice"
-                    value={form.unitPrice}
-                    onChange={handleFormChange}
-                    placeholder="Birim fiyat"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-
-              <tr>
-                <td>Toplam</td>
-                <td>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <input
-                      type="number"
-                      name="totalAmount"
-                      value={form.totalAmount}
-                      onChange={handleFormChange}
-                      placeholder="Toplam tutar"
-                      style={{
-                        flex: 1,
-                        padding: 12,
-                        borderRadius: 12,
-                        border: "1px solid #cbd5e1",
-                      }}
-                    />
-
-                    <button
-                      type="button"
-                      className="hero-button"
-                      onClick={calculateTotal}
-                    >
-                      Hesapla
-                    </button>
-                  </div>
-                </td>
-              </tr>
-
-              <tr>
-                <td>Ödeme Durumu</td>
-                <td>
-                  <select
-                    name="paymentStatus"
-                    value={form.paymentStatus}
-                    onChange={handleFormChange}
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  >
-                    <option value="UNPAID">Ödenmedi</option>
-                    <option value="PAID">Ödendi</option>
-                    <option value="PARTIAL">Kısmi Ödendi</option>
-                  </select>
-                </td>
-              </tr>
-
-              <tr>
-                <td>Kayıt Durumu</td>
-                <td>
-                  <select
-                    name="status"
-                    value={form.status}
-                    onChange={handleFormChange}
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  >
-                    <option value="DRAFT">Taslak</option>
-                    <option value="APPROVED">Onaylandı</option>
-                    <option value="CANCELLED">İptal</option>
-                  </select>
-                </td>
-              </tr>
-
-              <tr>
-                <td>Not</td>
-                <td>
-                  <textarea
-                    name="note"
-                    value={form.note}
-                    onChange={handleFormChange}
-                    rows="3"
-                    placeholder="İç not"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      borderRadius: 12,
-                      border: "1px solid #cbd5e1",
-                    }}
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          <button
-            className="hero-button"
-            type="submit"
-            disabled={saving}
-            style={{ marginTop: 18 }}
-          >
-            {saving
-              ? "Kaydediliyor..."
-              : selectedOrder
-                ? "Satın Alma Talebinı Güncelle"
-                : "Satın Alma Talebi Oluştur"}
-          </button>
-        </form>
-      </div>
-
-      <div className="panel">
-        <div className="panel-head">
-          <div>
-            <h2>Satın Alma Kayıtları</h2>
-
-            <p className="panel-sub">
-              Kayıtları düzenleyebilir, iptal edebilir veya Gider Yönetimi’ne
-              aktarabilirsin.
-            </p>
-          </div>
-
-          <span className="mini-pill">{purchaseOrders.length} kayıt</span>
-        </div>
-
-        <table className="module-table">
-          <thead>
-            <tr>
-              <th>İşlem</th>
-              <th>Tedarikçi</th>
-              <th>Talep Edilen Ürün / Kalem</th>
-              <th>Talep Tarihi</th>
-              <th>Miktar</th>
-              <th>Birim Fiyat</th>
-              <th>Toplam</th>
-              <th>Ödeme</th>
-              <th>Durum</th>
-              <th>Gider Aktarım</th>
-              <th>Stok Aktarım</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan="11">Satın alma talepleri yükleniyor...</td>
-              </tr>
-            ) : purchaseOrders.length === 0 ? (
-              <tr>
-                <td colSpan="11">Henüz satın alma kaydı yok.</td>
-              </tr>
-            ) : (
-              purchaseOrders.map((order) => (
-                <tr key={order.id}>
-                  <td>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        className="hero-button"
-                        onClick={() => handleSelectOrder(order)}
-                        style={{ padding: "8px 12px", borderRadius: 12 }}
-                      >
-                        Düzenle
-                      </button>
-
-                      {order.status !== "CANCELLED" && (
-                        <button
-                          type="button"
-                          className="hero-button"
-                          onClick={() => handleCancelOrder(order)}
-                          style={{
-                            padding: "8px 12px",
-                            borderRadius: 12,
-                            background: "#991b1b",
-                          }}
-                        >
-                          İptal Et
-                        </button>
-                      )}
-
-                      {!order.expenseCreated &&
-                        order.status !== "CANCELLED" && (
-                          <button
-                            type="button"
-                            className="hero-button"
-                            onClick={() => handleCreateExpense(order)}
-                            style={{
-                              padding: "8px 12px",
-                              borderRadius: 12,
-                              background: "#166534",
-                            }}
-                          >
-                            Gidere Aktar
-                          </button>
-                        )}
-
-                      {!order.stockMovementCreated &&
-                        order.status !== "CANCELLED" && (
-                          <button
-                            type="button"
-                            className="hero-button"
-                            onClick={() => handleCreateStockMovement(order)}
-                            style={{
-                              padding: "8px 12px",
-                              borderRadius: 12,
-                              background: "#1d4ed8",
-                            }}
-                          >
-                            Stoğa Aktar
-                          </button>
-                        )}
-                    </div>
-                  </td>
-
-                  <td>
-                    <div style={{ display: "grid", gap: 4 }}>
-                      <strong>{order.supplierName}</strong>
-
-                      {order.supplier && (
-                        <small style={{ color: "#64748b", lineHeight: 1.6 }}>
-                          Vergi No: {order.supplier.taxNumber || "-"}
-                          <br />
-                          IBAN: {order.supplier.iban || "-"}
-                          <br />
-                          Yetkili: {order.supplier.contactName || "-"}
-                        </small>
-                      )}
-                    </div>
-                  </td>
-
-                  <td>
-                    <div style={{ display: "grid", gap: 4 }}>
-                      <strong>{order.itemName}</strong>
-                      <small style={{ color: "#64748b" }}>
-                        {order.category} / No: {order.orderNo || "-"}
-                      </small>
-                    </div>
-                  </td>
-
-                  <td>{formatDate(order.orderDate || order.createdAt)}</td>
-                  <td>
-                    {order.quantity} {order.unit}
-                  </td>
-                  <td>{formatMoney(order.unitPrice)}</td>
-                  <td>{formatMoney(order.totalAmount)}</td>
-                  <td>
-                    {paymentStatusLabels[order.paymentStatus] ||
-                      order.paymentStatus}
-                  </td>
-                  <td>{statusLabels[order.status] || order.status}</td>
-                  <td>
-                    {order.expenseCreated
-                      ? "Gider Yönetimi’ne aktarıldı"
-                      : "Aktarım bekliyor"}
-                  </td>
-
-                  <td>
-                    {order.stockMovementCreated
-                      ? "Stoğa aktarıldı"
-                      : "Stok aktarımı bekliyor"}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+function FlowItem({ title, text }) {
+  return (
+    <div style={styles.flowItem}>
+      <strong>{title}</strong>
+      <span>{text}</span>
     </div>
   );
 }
+
+const styles = {
+  page: {
+    minHeight: "100vh",
+    padding: "28px",
+    color: "#f8fafc",
+    background:
+      "radial-gradient(circle at top left, #7c2d12 0, transparent 34%), linear-gradient(135deg, #0f172a 0%, #111827 48%, #020617 100%)",
+  },
+  hero: {
+    display: "grid",
+    gridTemplateColumns: "1fr 340px",
+    gap: "20px",
+    alignItems: "stretch",
+    marginBottom: "20px",
+  },
+  eyebrow: {
+    margin: 0,
+    color: "#fed7aa",
+    fontSize: "12px",
+    letterSpacing: "0.16em",
+    textTransform: "uppercase",
+    fontWeight: 800,
+  },
+  title: {
+    margin: "8px 0",
+    fontSize: "40px",
+    lineHeight: 1.05,
+  },
+  subtitle: {
+    margin: 0,
+    maxWidth: "760px",
+    color: "#cbd5e1",
+    lineHeight: 1.6,
+    fontSize: "15px",
+  },
+  heroCard: {
+    padding: "22px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.09)",
+    border: "1px solid rgba(255,255,255,0.13)",
+    boxShadow: "0 24px 80px rgba(0,0,0,0.35)",
+  },
+  heroLabel: {
+    display: "block",
+    color: "#cbd5e1",
+    fontSize: "13px",
+    marginBottom: "10px",
+  },
+  heroValue: {
+    display: "block",
+    fontSize: "32px",
+    color: "#ffffff",
+  },
+  heroNoteOk: {
+    display: "inline-block",
+    marginTop: "10px",
+    color: "#bbf7d0",
+    background: "rgba(34,197,94,0.16)",
+    padding: "6px 10px",
+    borderRadius: "999px",
+  },
+  heroNoteWarn: {
+    display: "inline-block",
+    marginTop: "10px",
+    color: "#fde68a",
+    background: "rgba(245,158,11,0.18)",
+    padding: "6px 10px",
+    borderRadius: "999px",
+  },
+  kpiGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: "16px",
+    marginBottom: "18px",
+  },
+  kpiCard: {
+    padding: "18px",
+    borderRadius: "20px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  kpiTitle: {
+    display: "block",
+    color: "#cbd5e1",
+    fontSize: "13px",
+    marginBottom: "10px",
+  },
+  kpiValue: {
+    display: "block",
+    fontSize: "30px",
+    color: "#ffffff",
+  },
+  kpiNote: {
+    display: "block",
+    color: "#94a3b8",
+    marginTop: "8px",
+  },
+  createGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "16px",
+    marginBottom: "16px",
+  },
+  panel: {
+    padding: "20px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  panelTitle: {
+    margin: 0,
+    fontSize: "21px",
+  },
+  panelText: {
+    margin: "6px 0 14px",
+    color: "#94a3b8",
+    fontSize: "13px",
+  },
+  formGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "10px",
+  },
+  input: {
+    height: "42px",
+    borderRadius: "14px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "#0f172a",
+    color: "#f8fafc",
+    padding: "0 12px",
+    outline: "none",
+  },
+  buttonWide: {
+    gridColumn: "1 / -1",
+    height: "44px",
+    border: 0,
+    borderRadius: "14px",
+    padding: "0 16px",
+    background: "linear-gradient(135deg, #f97316, #dc2626)",
+    color: "#ffffff",
+    fontWeight: 900,
+    cursor: "pointer",
+  },
+  infoMessage: {
+    marginTop: "12px",
+    padding: "12px",
+    borderRadius: "14px",
+    color: "#fde68a",
+    background: "rgba(245,158,11,0.13)",
+    border: "1px solid rgba(245,158,11,0.18)",
+  },
+  flowList: {
+    display: "grid",
+    gap: "10px",
+  },
+  flowItem: {
+    display: "grid",
+    gap: "5px",
+    padding: "14px",
+    borderRadius: "16px",
+    background: "rgba(15,23,42,0.55)",
+    color: "#cbd5e1",
+  },
+  toolbar: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "16px",
+    alignItems: "center",
+    padding: "20px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    marginBottom: "16px",
+  },
+  actions: {
+    display: "flex",
+    gap: "10px",
+    alignItems: "center",
+  },
+  select: {
+    height: "42px",
+    minWidth: "180px",
+    borderRadius: "14px",
+    border: "1px solid rgba(255,255,255,0.14)",
+    background: "#0f172a",
+    color: "#f8fafc",
+    padding: "0 12px",
+    outline: "none",
+  },
+  button: {
+    height: "42px",
+    border: 0,
+    borderRadius: "14px",
+    padding: "0 16px",
+    background: "linear-gradient(135deg, #f97316, #dc2626)",
+    color: "#ffffff",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  warningBox: {
+    padding: "16px",
+    borderRadius: "18px",
+    background: "rgba(245,158,11,0.12)",
+    border: "1px solid rgba(245,158,11,0.2)",
+    color: "#fde68a",
+    marginBottom: "16px",
+  },
+  stateBox: {
+    padding: "22px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    color: "#cbd5e1",
+    marginBottom: "16px",
+  },
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: "16px",
+  },
+  card: {
+    padding: "20px",
+    borderRadius: "24px",
+    background: "rgba(255,255,255,0.08)",
+    border: "1px solid rgba(255,255,255,0.1)",
+  },
+  cardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "14px",
+    alignItems: "flex-start",
+    marginBottom: "16px",
+  },
+  cardTitle: {
+    margin: 0,
+    fontSize: "20px",
+  },
+  cardText: {
+    margin: "7px 0 0",
+    color: "#cbd5e1",
+    lineHeight: 1.55,
+    fontSize: "13px",
+  },
+  badge: {
+    flex: "0 0 auto",
+    padding: "7px 11px",
+    borderRadius: "999px",
+    fontSize: "12px",
+    fontWeight: 900,
+  },
+  badgeOk: {
+    color: "#bbf7d0",
+    background: "rgba(34,197,94,0.16)",
+  },
+  badgeWarn: {
+    color: "#fde68a",
+    background: "rgba(245,158,11,0.18)",
+  },
+  badgeBlue: {
+    color: "#bfdbfe",
+    background: "rgba(59,130,246,0.18)",
+  },
+  badgeError: {
+    color: "#fecaca",
+    background: "rgba(239,68,68,0.18)",
+  },
+  amountBox: {
+    display: "grid",
+    gap: "6px",
+    padding: "16px",
+    borderRadius: "18px",
+    background: "rgba(15,23,42,0.55)",
+    marginBottom: "14px",
+  },
+  metaGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "12px",
+  },
+  metaBox: {
+    display: "grid",
+    gap: "6px",
+    padding: "14px",
+    borderRadius: "16px",
+    background: "rgba(15,23,42,0.45)",
+  },
+  priorityText: {
+    padding: "5px 8px",
+    borderRadius: "999px",
+    fontSize: "12px",
+  },
+  priorityHigh: {
+    color: "#fecaca",
+    background: "rgba(239,68,68,0.18)",
+  },
+  priorityMedium: {
+    color: "#fde68a",
+    background: "rgba(245,158,11,0.18)",
+  },
+  priorityLow: {
+    color: "#bbf7d0",
+    background: "rgba(34,197,94,0.16)",
+  },
+};
+
+export default PurchaseOrdersPage;

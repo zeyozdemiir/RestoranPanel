@@ -1,0 +1,1118 @@
+﻿import { useEffect, useMemo, useState } from "react";
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "TRY",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleDateString("tr-TR");
+}
+
+function getDateInputValue(value) {
+  if (!value) return "";
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function getPurchaseCategoryFromSupplier(supplierCategory) {
+  const categoryMap = {
+    Genel: "Stok / Satın Alma",
+    "Et / Tavuk": "Et / Tavuk",
+    Balık: "Balık",
+    "Sebze / Meyve": "Sebze / Meyve",
+    İçecek: "İçecek",
+    Alkol: "Alkol",
+    "Kuru Gıda": "Kuru Gıda",
+    Temizlik: "Temizlik",
+    "Teknik Servis": "Bakım / Onarım",
+    Pazarlama: "Pazarlama",
+    Diğer: "Diğer",
+  };
+
+  return categoryMap[supplierCategory] || "Stok / Satın Alma";
+}
+
+const emptyForm = {
+  supplierId: "",
+  supplierName: "",
+  orderNo: "",
+  orderDate: "",
+  category: "Stok / Satın Alma",
+  itemName: "",
+  quantity: "1",
+  unit: "adet",
+  unitPrice: "",
+  totalAmount: "",
+  paymentStatus: "UNPAID",
+  status: "DRAFT",
+  note: "",
+};
+
+const paymentStatusLabels = {
+  UNPAID: "Ödenmedi",
+  PAID: "Ödendi",
+  PARTIAL: "Kısmi Ödendi",
+};
+
+const statusLabels = {
+  DRAFT: "Taslak",
+  APPROVED: "Onaylandı",
+  CANCELLED: "İptal",
+};
+
+export default function PurchaseOrdersPage({ user }) {
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [form, setForm] = useState(emptyForm);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetchPurchaseOrders();
+    fetchSuppliers();
+    restoreDraft();
+  }, []);
+
+  useEffect(() => {
+    const hasDraftData =
+      form.supplierName ||
+      form.orderNo ||
+      form.orderDate ||
+      form.itemName ||
+      form.quantity !== "1" ||
+      form.unitPrice ||
+      form.totalAmount ||
+      form.note;
+
+    if (!selectedOrder && hasDraftData) {
+      localStorage.setItem(
+        "handsoff_purchase_order_draft",
+        JSON.stringify(form)
+      );
+    }
+  }, [form, selectedOrder]);
+
+  function restoreDraft() {
+    try {
+      const rawDraft = localStorage.getItem("handsoff_purchase_order_draft");
+
+      if (!rawDraft) {
+        return;
+      }
+
+      const draft = JSON.parse(rawDraft);
+
+      if (!draft || typeof draft !== "object") {
+        localStorage.removeItem("handsoff_purchase_order_draft");
+        return;
+      }
+
+      setForm({
+        ...emptyForm,
+        ...draft,
+      });
+
+      setMessage("Kaydedilmemiş satın alma talebi taslağın geri yüklendi.");
+    } catch {
+      localStorage.removeItem("handsoff_purchase_order_draft");
+    }
+  }
+
+  async function fetchPurchaseOrders() {
+    try {
+      setLoading(true);
+      setError("");
+
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch("http://localhost:4000/api/purchase-orders", {
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Satın alma talepleri alınamadı.");
+        return;
+      }
+
+      setPurchaseOrders(data.purchaseOrders || []);
+    } catch {
+      setError("Backend bağlantısı kurulamadı.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function fetchSuppliers() {
+    try {
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch("http://localhost:4000/api/suppliers", {
+        headers: {
+          Authorization: "Bearer " + token,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSuppliers(data.suppliers || []);
+      }
+    } catch {
+      setSuppliers([]);
+    }
+  }
+
+  function handleFormChange(event) {
+    const { name, value } = event.target;
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      [name]: value,
+    }));
+  }
+
+  function handleNewOrder() {
+    localStorage.removeItem("handsoff_purchase_order_draft");
+    setSelectedOrder(null);
+    setForm(emptyForm);
+    setMessage("");
+    setError("");
+  }
+
+  function handleSelectSupplier(supplier) {
+    setForm((currentForm) => ({
+      ...currentForm,
+      supplierId: String(supplier.id),
+      supplierName: supplier.name,
+      category: getPurchaseCategoryFromSupplier(supplier.category),
+    }));
+  }
+
+  function handleSelectOrder(order) {
+    setSelectedOrder(order);
+    setMessage("");
+    setError("");
+
+    setForm({
+      supplierId: order.supplierId ? String(order.supplierId) : "",
+      supplierName: order.supplierName || "",
+      orderNo: order.orderNo || "",
+      orderDate: getDateInputValue(order.orderDate || order.createdAt),
+      category: order.category || "Stok / Satın Alma",
+      itemName: order.itemName || "",
+      quantity: String(order.quantity || "1"),
+      unit: order.unit || "adet",
+      unitPrice: String(order.unitPrice || ""),
+      totalAmount: String(order.totalAmount || ""),
+      paymentStatus: order.paymentStatus || "UNPAID",
+      status: order.status || "DRAFT",
+      note: order.note || "",
+    });
+  }
+
+  function calculateTotal() {
+    const quantity = Number(form.quantity || 0);
+    const unitPrice = Number(form.unitPrice || 0);
+
+    setForm((currentForm) => ({
+      ...currentForm,
+      totalAmount: String(quantity * unitPrice),
+    }));
+  }
+
+  async function handleSaveOrder(event) {
+    event.preventDefault();
+
+    if (!form.supplierName.trim()) {
+      setError("Lütfen tedarikçi seç veya tedarikçi adı yaz.");
+      return;
+    }
+
+    if (!form.itemName.trim()) {
+      setError("Lütfen ürün / kalem adı yaz.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+
+      const token = localStorage.getItem("handsoff_token");
+
+      const url = selectedOrder
+        ? `http://localhost:4000/api/purchase-orders/${selectedOrder.id}`
+        : "http://localhost:4000/api/purchase-orders";
+
+      const method = selectedOrder ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify(form),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Satın alma talebi kaydedilemedi.");
+        return;
+      }
+
+      localStorage.removeItem("handsoff_purchase_order_draft");
+
+      setMessage(
+        selectedOrder
+          ? "Satın alma talebi güncellendi."
+          : "Satın alma talebi oluşturuldu."
+      );
+
+      setSelectedOrder(data.purchaseOrder || null);
+      await fetchPurchaseOrders();
+    } catch {
+      setError("Satın alma talebi kaydedilirken backend bağlantısı kurulamadı.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCancelOrder(order) {
+    const confirmed = window.confirm(
+      "Bu satın alma talebi iptal edilecek. Devam edilsin mi?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch(
+        `http://localhost:4000/api/purchase-orders/${order.id}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify({
+            status: "CANCELLED",
+            note: order.note
+              ? order.note + "\nSatın alma talebi iptal edildi."
+              : "Satın alma talebi iptal edildi.",
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Satın alma talebi iptal edilemedi.");
+        return;
+      }
+
+      setMessage("Satın alma talebi iptal edildi.");
+      setSelectedOrder(null);
+      setForm(emptyForm);
+      await fetchPurchaseOrders();
+    } catch {
+      setError("Satın alma iptal edilirken backend bağlantısı kurulamadı.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreateStockMovement(order) {
+    const confirmed = window.confirm(
+      "Bu satın alma talebi stoğa aktarılacak. Devam edilsin mi?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch(
+        `http://localhost:4000/api/purchase-orders/${order.id}/create-stock-movement`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + token,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Satın alma talebi stoğa aktarılamadı.");
+        return;
+      }
+
+      setMessage("Satın alma talebi stoğa aktarıldı.");
+      await fetchPurchaseOrders();
+    } catch {
+      setError("Stoğa aktarılırken backend bağlantısı kurulamadı.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCreateExpense(order) {
+    const confirmed = window.confirm(
+      "Bu satın alma talebi Gider Yönetimi’ne aktarılacak. Devam edilsin mi?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setMessage("");
+
+      const token = localStorage.getItem("handsoff_token");
+
+      const response = await fetch(
+        `http://localhost:4000/api/purchase-orders/${order.id}/create-expense`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + token,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Satın alma giderlere aktarılamadı.");
+        return;
+      }
+
+      setMessage("Satın alma talebi Gider Yönetimi’ne aktarıldı.");
+      await fetchPurchaseOrders();
+    } catch {
+      setError("Giderlere aktarılırken backend bağlantısı kurulamadı.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const activeSuppliers = suppliers.filter((supplier) => supplier.isActive);
+
+  const activeOrders = purchaseOrders.filter(
+    (order) => order.status !== "CANCELLED"
+  );
+
+  const totalPurchaseAmount = activeOrders.reduce((total, order) => {
+    return total + Number(order.totalAmount || 0);
+  }, 0);
+
+  const unpaidAmount = activeOrders
+    .filter((order) => order.paymentStatus === "UNPAID")
+    .reduce((total, order) => total + Number(order.totalAmount || 0), 0);
+
+  const transferredAmount = activeOrders
+    .filter((order) => order.expenseCreated)
+    .reduce((total, order) => total + Number(order.totalAmount || 0), 0);
+
+  const waitingTransferCount = activeOrders.filter(
+    (order) => !order.expenseCreated
+  ).length;
+
+  const categorySummary = useMemo(() => {
+    const summaryMap = new Map();
+
+    activeOrders.forEach((order) => {
+      const category = order.category || "Stok / Satın Alma";
+      const current = summaryMap.get(category) || {
+        category,
+        count: 0,
+        totalAmount: 0,
+      };
+
+      current.count += 1;
+      current.totalAmount += Number(order.totalAmount || 0);
+
+      summaryMap.set(category, current);
+    });
+
+    return Array.from(summaryMap.values()).sort(
+      (a, b) => b.totalAmount - a.totalAmount
+    );
+  }, [purchaseOrders]);
+
+  const selectedSupplierInfo = suppliers.find(
+    (supplier) => supplier.name === form.supplierName
+  );
+
+  return (
+    <div className="page">
+      <div className="hero">
+        <div className="hero-content">
+          <div>
+            <p className="eyebrow">HandsOff / {user.restaurantName}</p>
+
+            <h1>Satın Alma Talepleri</h1>
+
+            <p>
+              Tedarikçiden yapılan satın almaları, satın alma taleplerini ve giderlere
+              aktarılması gereken kayıtları buradan yönetebilirsin.
+            </p>
+          </div>
+
+          <button
+            className="hero-button"
+            type="button"
+            onClick={() => {
+              fetchPurchaseOrders();
+              fetchSuppliers();
+            }}
+          >
+            Yenile
+          </button>
+        </div>
+      </div>
+
+      {message && (
+        <div
+          className="error-box"
+          style={{
+            color: "#166534",
+            background: "#f0fdf4",
+            borderColor: "#bbf7d0",
+          }}
+        >
+          {message}
+        </div>
+      )}
+
+      {error && <div className="error-box">{error}</div>}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gap: 18,
+        }}
+      >
+        <div className="stat-card">
+          <p>Toplam Satın Alma</p>
+          <h3>{formatMoney(totalPurchaseAmount)}</h3>
+          <span>{activeOrders.length} aktif kayıt</span>
+        </div>
+
+        <div className="stat-card">
+          <p>Ödenmemiş</p>
+          <h3>{formatMoney(unpaidAmount)}</h3>
+          <span>Tedarikçi borcu olarak takip edilir</span>
+        </div>
+
+        <div className="stat-card">
+          <p>Gidere Aktarılan</p>
+          <h3>{formatMoney(transferredAmount)}</h3>
+          <span>Gider Yönetimi’ne düşen kayıtlar</span>
+        </div>
+
+        <div className="stat-card">
+          <p>Aktarım Bekleyen</p>
+          <h3>{waitingTransferCount}</h3>
+          <span>Gider Yönetimi’ne aktarılmamış kayıt</span>
+        </div>
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Kategori Özeti</h2>
+
+            <p className="panel-sub">
+              Satın alma taleplerinın kategori bazlı dağılımı.
+            </p>
+          </div>
+
+          <span className="mini-pill">{categorySummary.length} kategori</span>
+        </div>
+
+        <table className="module-table">
+          <thead>
+            <tr>
+              <th>Kategori</th>
+              <th>Kayıt</th>
+              <th>Toplam</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {categorySummary.length === 0 ? (
+              <tr>
+                <td colSpan="3">Henüz kategori özeti yok.</td>
+              </tr>
+            ) : (
+              categorySummary.map((item) => (
+                <tr key={item.category}>
+                  <td>{item.category}</td>
+                  <td>{item.count}</td>
+                  <td>{formatMoney(item.totalAmount)}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>
+              {selectedOrder
+                ? "Satın Alma Talebinı Düzenle"
+                : "Yeni Satın Alma Talebi"}
+            </h2>
+
+            <p className="panel-sub">
+              Tedarikçi seç, ürün veya talep kalemini gir, toplamı hesapla ve
+              istersen Gider Yönetimi’ne aktar.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span className="mini-pill">
+              {selectedOrder ? "Seçili Kayıt" : "Yeni Kayıt"}
+            </span>
+
+            <button
+              className="hero-button"
+              type="button"
+              onClick={handleNewOrder}
+            >
+              Yeni Satın Alma
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSaveOrder}>
+          <table className="module-table">
+            <tbody>
+              <tr>
+                <td>Tedarikçi</td>
+                <td>
+                  <div style={{ display: "grid", gap: 12 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        flexWrap: "wrap",
+                        padding: 12,
+                        borderRadius: 12,
+                        border: "1px solid #cbd5e1",
+                        background: "#f8fafc",
+                      }}
+                    >
+                      {activeSuppliers.length === 0 ? (
+                        <span style={{ color: "#64748b" }}>
+                          Aktif tedarikçi yok. Manuel yazabilirsin.
+                        </span>
+                      ) : (
+                        activeSuppliers.map((supplier) => (
+                          <button
+                            key={supplier.id}
+                            type="button"
+                            onClick={() => handleSelectSupplier(supplier)}
+                            style={{
+                              padding: "10px 14px",
+                              borderRadius: 12,
+                              border: "0",
+                              cursor: "pointer",
+                              fontWeight: 700,
+                              color: "#ffffff",
+                              background:
+                                form.supplierName === supplier.name
+                                  ? "#166534"
+                                  : "#0f172a",
+                            }}
+                          >
+                            {supplier.name}
+                            {supplier.iban ? " · IBAN var" : ""}
+                          </button>
+                        ))
+                      )}
+                    </div>
+
+                    <input
+                      name="supplierName"
+                      value={form.supplierName}
+                      onChange={handleFormChange}
+                      placeholder="Tedarikçiye tıkla ya da manuel tedarikçi adı yaz"
+                      style={{
+                        width: "100%",
+                        padding: 12,
+                        borderRadius: 12,
+                        border: "1px solid #cbd5e1",
+                      }}
+                    />
+
+                    {selectedSupplierInfo && (
+                      <div
+                        style={{
+                          display: "grid",
+                          gap: 6,
+                          padding: 12,
+                          borderRadius: 12,
+                          border: "1px solid #bbf7d0",
+                          background: "#f0fdf4",
+                          color: "#14532d",
+                        }}
+                      >
+                        <strong>Seçili Tedarikçi Bilgileri</strong>
+                        <span>Kategori: {selectedSupplierInfo.category || "-"}</span>
+                        <span>Vergi No: {selectedSupplierInfo.taxNumber || "-"}</span>
+                        <span>IBAN: {selectedSupplierInfo.iban || "-"}</span>
+                        <span>Yetkili: {selectedSupplierInfo.contactName || "-"}</span>
+                        <span>Telefon: {selectedSupplierInfo.phone || "-"}</span>
+                      </div>
+                    )}
+                  </div>
+                </td>
+              </tr>
+
+              <tr>
+                <td>Talep No</td>
+                <td>
+                  <input
+                    name="orderNo"
+                    value={form.orderNo}
+                    onChange={handleFormChange}
+                    placeholder="Varsa talep numarası"
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  />
+                </td>
+              </tr>
+
+              <tr>
+                <td>Talep Tarihi</td>
+                <td>
+                  <input
+                    type="date"
+                    name="orderDate"
+                    value={form.orderDate}
+                    onChange={handleFormChange}
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  />
+                </td>
+              </tr>
+
+              <tr>
+                <td>Kategori</td>
+                <td>
+                  <select
+                    name="category"
+                    value={form.category}
+                    onChange={handleFormChange}
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  >
+                    <option value="Stok / Satın Alma">Stok / Satın Alma</option>
+                    <option value="Et / Tavuk">Et / Tavuk</option>
+                    <option value="Balık">Balık</option>
+                    <option value="Sebze / Meyve">Sebze / Meyve</option>
+                    <option value="İçecek">İçecek</option>
+                    <option value="Alkol">Alkol</option>
+                    <option value="Kuru Gıda">Kuru Gıda</option>
+                    <option value="Temizlik">Temizlik</option>
+                    <option value="Bakım / Onarım">Bakım / Onarım</option>
+                    <option value="Pazarlama">Pazarlama</option>
+                    <option value="Diğer">Diğer</option>
+                  </select>
+                </td>
+              </tr>
+
+              <tr>
+                <td>Talep Edilen Ürün / Kalem</td>
+                <td>
+                  <input
+                    name="itemName"
+                    value={form.itemName}
+                    onChange={handleFormChange}
+                    placeholder="Örn: Dana bonfile, şarap, sebze kasası, temizlik ürünü"
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  />
+                </td>
+              </tr>
+
+              <tr>
+                <td>Miktar</td>
+                <td>
+                  <input
+                    type="number"
+                    name="quantity"
+                    value={form.quantity}
+                    onChange={handleFormChange}
+                    placeholder="Miktar"
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  />
+                </td>
+              </tr>
+
+              <tr>
+                <td>Birim</td>
+                <td>
+                  <select
+                    name="unit"
+                    value={form.unit}
+                    onChange={handleFormChange}
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  >
+                    <option value="adet">adet</option>
+                    <option value="kg">kg</option>
+                    <option value="gr">gr</option>
+                    <option value="lt">lt</option>
+                    <option value="ml">ml</option>
+                    <option value="koli">koli</option>
+                    <option value="şişe">şişe</option>
+                    <option value="paket">paket</option>
+                  </select>
+                </td>
+              </tr>
+
+              <tr>
+                <td>Birim Fiyat</td>
+                <td>
+                  <input
+                    type="number"
+                    name="unitPrice"
+                    value={form.unitPrice}
+                    onChange={handleFormChange}
+                    placeholder="Birim fiyat"
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  />
+                </td>
+              </tr>
+
+              <tr>
+                <td>Toplam</td>
+                <td>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <input
+                      type="number"
+                      name="totalAmount"
+                      value={form.totalAmount}
+                      onChange={handleFormChange}
+                      placeholder="Toplam tutar"
+                      style={{
+                        flex: 1,
+                        padding: 12,
+                        borderRadius: 12,
+                        border: "1px solid #cbd5e1",
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      className="hero-button"
+                      onClick={calculateTotal}
+                    >
+                      Hesapla
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <tr>
+                <td>Ödeme Durumu</td>
+                <td>
+                  <select
+                    name="paymentStatus"
+                    value={form.paymentStatus}
+                    onChange={handleFormChange}
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  >
+                    <option value="UNPAID">Ödenmedi</option>
+                    <option value="PAID">Ödendi</option>
+                    <option value="PARTIAL">Kısmi Ödendi</option>
+                  </select>
+                </td>
+              </tr>
+
+              <tr>
+                <td>Kayıt Durumu</td>
+                <td>
+                  <select
+                    name="status"
+                    value={form.status}
+                    onChange={handleFormChange}
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  >
+                    <option value="DRAFT">Taslak</option>
+                    <option value="APPROVED">Onaylandı</option>
+                    <option value="CANCELLED">İptal</option>
+                  </select>
+                </td>
+              </tr>
+
+              <tr>
+                <td>Not</td>
+                <td>
+                  <textarea
+                    name="note"
+                    value={form.note}
+                    onChange={handleFormChange}
+                    rows="3"
+                    placeholder="İç not"
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      borderRadius: 12,
+                      border: "1px solid #cbd5e1",
+                    }}
+                  />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <button
+            className="hero-button"
+            type="submit"
+            disabled={saving}
+            style={{ marginTop: 18 }}
+          >
+            {saving
+              ? "Kaydediliyor..."
+              : selectedOrder
+                ? "Satın Alma Talebinı Güncelle"
+                : "Satın Alma Talebi Oluştur"}
+          </button>
+        </form>
+      </div>
+
+      <div className="panel">
+        <div className="panel-head">
+          <div>
+            <h2>Satın Alma Kayıtları</h2>
+
+            <p className="panel-sub">
+              Kayıtları düzenleyebilir, iptal edebilir veya Gider Yönetimi’ne
+              aktarabilirsin.
+            </p>
+          </div>
+
+          <span className="mini-pill">{purchaseOrders.length} kayıt</span>
+        </div>
+
+        <table className="module-table">
+          <thead>
+            <tr>
+              <th>İşlem</th>
+              <th>Tedarikçi</th>
+              <th>Talep Edilen Ürün / Kalem</th>
+              <th>Talep Tarihi</th>
+              <th>Miktar</th>
+              <th>Birim Fiyat</th>
+              <th>Toplam</th>
+              <th>Ödeme</th>
+              <th>Durum</th>
+              <th>Gider Aktarım</th>
+              <th>Stok Aktarım</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan="11">Satın alma talepleri yükleniyor...</td>
+              </tr>
+            ) : purchaseOrders.length === 0 ? (
+              <tr>
+                <td colSpan="11">Henüz satın alma kaydı yok.</td>
+              </tr>
+            ) : (
+              purchaseOrders.map((order) => (
+                <tr key={order.id}>
+                  <td>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        className="hero-button"
+                        onClick={() => handleSelectOrder(order)}
+                        style={{ padding: "8px 12px", borderRadius: 12 }}
+                      >
+                        Düzenle
+                      </button>
+
+                      {order.status !== "CANCELLED" && (
+                        <button
+                          type="button"
+                          className="hero-button"
+                          onClick={() => handleCancelOrder(order)}
+                          style={{
+                            padding: "8px 12px",
+                            borderRadius: 12,
+                            background: "#991b1b",
+                          }}
+                        >
+                          İptal Et
+                        </button>
+                      )}
+
+                      {!order.expenseCreated &&
+                        order.status !== "CANCELLED" && (
+                          <button
+                            type="button"
+                            className="hero-button"
+                            onClick={() => handleCreateExpense(order)}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: 12,
+                              background: "#166534",
+                            }}
+                          >
+                            Gidere Aktar
+                          </button>
+                        )}
+
+                      {!order.stockMovementCreated &&
+                        order.status !== "CANCELLED" && (
+                          <button
+                            type="button"
+                            className="hero-button"
+                            onClick={() => handleCreateStockMovement(order)}
+                            style={{
+                              padding: "8px 12px",
+                              borderRadius: 12,
+                              background: "#1d4ed8",
+                            }}
+                          >
+                            Stoğa Aktar
+                          </button>
+                        )}
+                    </div>
+                  </td>
+
+                  <td>
+                    <div style={{ display: "grid", gap: 4 }}>
+                      <strong>{order.supplierName}</strong>
+
+                      {order.supplier && (
+                        <small style={{ color: "#64748b", lineHeight: 1.6 }}>
+                          Vergi No: {order.supplier.taxNumber || "-"}
+                          <br />
+                          IBAN: {order.supplier.iban || "-"}
+                          <br />
+                          Yetkili: {order.supplier.contactName || "-"}
+                        </small>
+                      )}
+                    </div>
+                  </td>
+
+                  <td>
+                    <div style={{ display: "grid", gap: 4 }}>
+                      <strong>{order.itemName}</strong>
+                      <small style={{ color: "#64748b" }}>
+                        {order.category} / No: {order.orderNo || "-"}
+                      </small>
+                    </div>
+                  </td>
+
+                  <td>{formatDate(order.orderDate || order.createdAt)}</td>
+                  <td>
+                    {order.quantity} {order.unit}
+                  </td>
+                  <td>{formatMoney(order.unitPrice)}</td>
+                  <td>{formatMoney(order.totalAmount)}</td>
+                  <td>
+                    {paymentStatusLabels[order.paymentStatus] ||
+                      order.paymentStatus}
+                  </td>
+                  <td>{statusLabels[order.status] || order.status}</td>
+                  <td>
+                    {order.expenseCreated
+                      ? "Gider Yönetimi’ne aktarıldı"
+                      : "Aktarım bekliyor"}
+                  </td>
+
+                  <td>
+                    {order.stockMovementCreated
+                      ? "Stoğa aktarıldı"
+                      : "Stok aktarımı bekliyor"}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
